@@ -87,6 +87,10 @@ class CatalogScreen extends StatelessWidget {
   }
 
   Widget _buildCampaignCard(BuildContext context, Campaign campaign) {
+    // Verificar si el estudiante ya está inscrito en esta campaña
+    final bool isAlreadyRegistered =
+        LocalDataService.isStudentRegisteredInCampaign('1', campaign.id);
+
     Color statusColor;
     switch (campaign.status) {
       case 'Confirmado':
@@ -193,22 +197,57 @@ class CatalogScreen extends StatelessWidget {
             valueColor: AlwaysStoppedAnimation<Color>(statusColor),
           ),
           const SizedBox(height: 12),
-          // Botón Ver detalles
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pushNamed(context, '/detalle', arguments: campaign);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+          // Botón Ver detalles y estado de inscripción
+          Column(
+            children: [
+              // Indicador de inscripción si ya está inscrito
+              if (isAlreadyRegistered)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 6.0),
+                  margin: const EdgeInsets.only(bottom: 8.0),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.shade300),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        'Ya estás inscrito',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushNamed(
+                      context,
+                      '/detalle',
+                      arguments: campaign,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Ver detalles'),
                 ),
               ),
-              child: const Text('Ver detalles'),
-            ),
+            ],
           ),
         ],
       ),

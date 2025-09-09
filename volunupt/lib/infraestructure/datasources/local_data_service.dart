@@ -1,4 +1,5 @@
 import 'package:volunupt/domain/entities/campaign.dart';
+import 'package:volunupt/domain/entities/registration.dart';
 
 class LocalDataService {
   // Datos hardcodeados de campañas
@@ -95,10 +96,45 @@ class LocalDataService {
     return campaigns.first; // Solo una campaña/curso para el ingeniero
   }
 
+  // Datos hardcodeados de inscripciones (public para acceso desde el repositorio)
+  static final List<Registration> registrations = [
+    Registration(
+      id: '1',
+      campaignId: '1', // Reforestación en el Parque Ecológico
+      studentId: '1', // ALUMNO1
+      registrationDate: DateTime.now().subtract(const Duration(days: 5)),
+      status: 'Confirmado',
+    ),
+    Registration(
+      id: '2',
+      campaignId: '2', // Taller de Robótica para Niños
+      studentId: '1', // ALUMNO1
+      registrationDate: DateTime.now().subtract(const Duration(days: 2)),
+      status: 'Pendiente',
+    ),
+  ];
+
   // Obtener inscripciones del alumno1
   static List<Campaign> getStudentRegistrations() {
-    return campaigns
-        .where((c) => c.status == 'Confirmado' || c.status == 'Pendiente')
+    // Obtener IDs de campañas en las que el estudiante está inscrito
+    final registeredCampaignIds = registrations
+        .where((r) => 
+            r.studentId == '1' && // Hardcodeado para ALUMNO1
+            (r.status == 'Confirmado' || r.status == 'Pendiente'))
+        .map((r) => r.campaignId)
         .toList();
+    
+    // Filtrar campañas por IDs
+    return campaigns
+        .where((c) => registeredCampaignIds.contains(c.id))
+        .toList();
+  }
+  
+  // Verificar si un estudiante está inscrito en una campaña específica
+  static bool isStudentRegisteredInCampaign(String studentId, String campaignId) {
+    return registrations.any((r) => 
+        r.studentId == studentId && 
+        r.campaignId == campaignId && 
+        (r.status == 'Confirmado' || r.status == 'Pendiente' || r.status == 'Lista de espera'));
   }
 }

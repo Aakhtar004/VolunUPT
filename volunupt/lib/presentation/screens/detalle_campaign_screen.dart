@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:volunupt/domain/entities/campaign.dart';
 import 'package:volunupt/domain/entities/qr_data.dart';
+import 'package:volunupt/infraestructure/datasources/local_data_service.dart';
 import 'package:volunupt/infraestructure/repositories/auth_repository_impl_local.dart';
 import 'package:volunupt/infraestructure/datasources/auth_datasource_local.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -302,10 +303,51 @@ class _DetalleCampaignScreenState extends State<DetalleCampaignScreen> {
                   ),
                   const SizedBox(height: 32),
 
+                  // Verificar si el estudiante ya está inscrito y mostrar mensaje
+                  if (userRole == 'student' &&
+                      !isFromInscripciones &&
+                      LocalDataService.isStudentRegisteredInCampaign(
+                        '1',
+                        campaign.id,
+                      )) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12.0,
+                        horizontal: 16.0,
+                      ),
+                      margin: const EdgeInsets.only(bottom: 16.0),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.shade300),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Ya estás inscrito en esta campaña. Puedes ver tu QR de asistencia en la sección "Mis Inscripciones".',
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
                   // Botones SOLO desde catálogo para estudiantes
                   if (userRole == 'student' &&
                       !isFromInscripciones &&
-                      campaign.status != 'Completada') ...[
+                      campaign.status != 'Completada' &&
+                      !LocalDataService.isStudentRegisteredInCampaign(
+                        '1',
+                        campaign.id,
+                      )) ...[
                     SizedBox(
                       width: double.infinity,
                       height: 48,
