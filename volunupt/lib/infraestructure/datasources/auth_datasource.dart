@@ -53,7 +53,8 @@ class AuthDatasource {
       debugPrint('Token convertido: $token');
 
       debugPrint('Creando objeto User');
-      final user = User(id: id, email: email, token: token);
+      final role = response.data['role']?.toString() ?? '';
+      final user = User(id: id, email: email, token: token, role: role);
       debugPrint('User creado exitosamente');
 
       return user;

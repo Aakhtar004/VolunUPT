@@ -9,6 +9,7 @@ import 'package:volunupt/infraestructure/datasources/auth_datasource_local.dart'
 import 'package:volunupt/presentation/screens/prelogin_screen.dart';
 import 'package:volunupt/presentation/screens/login_screen.dart';
 import 'package:volunupt/presentation/screens/register_screen.dart';
+
 import 'package:volunupt/presentation/screens/home_screen.dart';
 import 'package:volunupt/presentation/screens/catalog_screen.dart';
 import 'package:volunupt/presentation/screens/inscripciones_screen.dart';
@@ -43,11 +44,13 @@ class MyApp extends StatelessWidget {
           '/': (context) => const PreLoginScreen(),
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegisterScreen(),
+          //DIVIDIDO ENTRE ESTUDIANTES   Y COORDINADOR
           '/home': (context) => const HomeScreen(),
           '/catalog': (context) => const CatalogScreen(),
           '/inscripciones': (context) => const InscripcionesScreen(),
           '/detalle': (context) => const DetalleCampaignScreen(),
           '/qr_attendance': (context) => const QRAttendanceScreen(),
+          //DIVIDIDO LISTA DE ASISTENCIA
           '/attendance_list': (context) => const AttendanceListScreen(),
         },
       ),
