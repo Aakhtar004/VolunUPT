@@ -4,7 +4,7 @@ import 'package:volunupt/domain/entities/user.dart';
 
 abstract class AuthRepository {
   Future<User> login(AuthCredentials credentials);
-  Future<User> register(RegisterCredentials credentials); // 🆕 Nuevo método
+  Future<User> register(RegisterCredentials credentials);
   Future<void> logout();
   Future<String?> getToken();
 }
