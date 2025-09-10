@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:volunupt/application/blocs/auth_bloc.dart';
 import 'package:volunupt/infraestructure/repositories/auth_repository_impl_local.dart';
 import 'package:volunupt/infraestructure/datasources/auth_datasource_local.dart';
-import 'package:volunupt/presentation/screens/student_home_screen.dart';
-import 'package:volunupt/presentation/screens/engineer_home_screen.dart';
+import 'package:volunupt/presentation/screens/estudiante/student_home_screen.dart';
+import 'package:volunupt/presentation/screens/coordinador/engineer_home_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,9 +35,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // Redirigir según el role del usuario
-    if (userRole == 'student') {
+    if (userRole == 'Estudiante') {
       return const StudentHomeScreen();
-    } else if (userRole == 'engineer') {
+    } else if (userRole == 'Coordinador') {
       return const EngineerHomeScreen();
     }
 

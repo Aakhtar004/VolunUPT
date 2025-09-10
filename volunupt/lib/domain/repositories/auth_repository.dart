@@ -7,4 +7,6 @@ abstract class AuthRepository {
   Future<User> register(RegisterCredentials credentials);
   Future<void> logout();
   Future<String?> getToken();
+  Future<String?> getUserRole();
+  Future<String?> getUserFullName();
 }

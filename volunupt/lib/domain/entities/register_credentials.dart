@@ -3,12 +3,14 @@ class RegisterCredentials {
   final String password;
   final String confirmPassword;
   final String fullName;
+  final String role;
 
   RegisterCredentials({
     required this.email,
     required this.password,
     required this.confirmPassword,
     required this.fullName,
+    required this.role,
   });
 
   // Validación básica

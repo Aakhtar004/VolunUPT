@@ -1,9 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:volunupt/application/blocs/auth_bloc.dart';
+import 'package:volunupt/infraestructure/repositories/auth_repository_impl_local.dart';
+import 'package:volunupt/infraestructure/datasources/auth_datasource_local.dart';
 
-class PerfilScreen extends StatelessWidget {
+class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
+
+  @override
+  State<PerfilScreen> createState() => _PerfilScreenState();
+}
+
+class _PerfilScreenState extends State<PerfilScreen> {
+  String? userFullName;
+  String? userEmail;
+  String? userRole;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final authRepository = AuthRepositoryImplLocal(AuthDatasourceLocal());
+    final fullName = await authRepository.getUserFullName();
+    final email = await authRepository.storage.read(key: 'user_email');
+    final role = await authRepository.getUserRole();
+
+    setState(() {
+      userFullName = fullName ?? 'Usuario';
+      userEmail = email ?? '';
+      userRole = role ?? '';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +52,7 @@ class PerfilScreen extends StatelessWidget {
                 bottomRight: Radius.circular(20),
               ),
             ),
-            child: const Column(
+            child: Column(
               children: [
                 CircleAvatar(
                   radius: 50,
@@ -31,7 +61,7 @@ class PerfilScreen extends StatelessWidget {
                 ),
                 SizedBox(height: 16),
                 Text(
-                  'Carlos Mendoza',
+                  userFullName ?? 'Cargando...',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -39,7 +69,7 @@ class PerfilScreen extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Ingeniero de Sistemas',
+                  userRole ?? 'Cargando...',
                   style: TextStyle(fontSize: 16, color: Colors.white70),
                 ),
               ],

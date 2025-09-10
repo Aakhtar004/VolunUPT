@@ -4,15 +4,17 @@ class User extends Equatable {
   final String id;
   final String email;
   final String token;
-  final String role; // Nuevo campo
+  final String role; // 'Estudiante' o 'Coordinador'
+  final String fullName;
 
-  User({
+  const User({
     required this.id,
     required this.email,
     required this.token,
     required this.role,
+    required this.fullName,
   });
 
   @override
-  List<Object?> get props => [id, email, token, role];
+  List<Object?> get props => [id, email, token, role, fullName];
 }

@@ -3,19 +3,21 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:volunupt/application/blocs/auth_bloc.dart';
 import 'package:volunupt/domain/usecases/login_usecase.dart';
 import 'package:volunupt/domain/usecases/register_usecase.dart';
+import 'package:volunupt/domain/usecases/logout_usecase.dart';
+import 'package:volunupt/domain/usecases/check_auth_status_usecase.dart';
 import 'package:volunupt/infraestructure/repositories/auth_repository_impl_local.dart';
 import 'package:volunupt/infraestructure/datasources/auth_datasource_local.dart';
 
-import 'package:volunupt/presentation/screens/prelogin_screen.dart';
-import 'package:volunupt/presentation/screens/login_screen.dart';
-import 'package:volunupt/presentation/screens/register_screen.dart';
+import 'package:volunupt/presentation/screens/shared/prelogin_screen.dart';
+import 'package:volunupt/presentation/screens/shared/login_screen.dart';
+import 'package:volunupt/presentation/screens/shared/register_screen.dart';
+import 'package:volunupt/presentation/screens/shared/detalle_campaign_screen.dart';
+import 'package:volunupt/presentation/screens/shared/home_screen.dart';
 
-import 'package:volunupt/presentation/screens/home_screen.dart';
-import 'package:volunupt/presentation/screens/catalog_screen.dart';
-import 'package:volunupt/presentation/screens/inscripciones_screen.dart';
-import 'package:volunupt/presentation/screens/detalle_campaign_screen.dart';
-import 'package:volunupt/presentation/screens/qr_attendance_screen.dart';
-import 'package:volunupt/presentation/screens/attendance_list_screen.dart';
+import 'package:volunupt/presentation/screens/estudiante/catalog_screen.dart';
+import 'package:volunupt/presentation/screens/estudiante/inscripciones_screen.dart';
+import 'package:volunupt/presentation/screens/estudiante/qr_attendance_screen.dart';
+import 'package:volunupt/presentation/screens/coordinador/attendance_list_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -30,9 +32,18 @@ class MyApp extends StatelessWidget {
     final authRepository = AuthRepositoryImplLocal(AuthDatasourceLocal());
     final loginUseCase = LoginUseCase(authRepository: authRepository);
     final registerUseCase = RegisterUseCase(authRepository: authRepository);
+    final logoutUseCase = LogoutUseCase(authRepository: authRepository);
+    final checkAuthStatusUseCase = CheckAuthStatusUseCase(
+      authRepository: authRepository,
+    );
 
     return BlocProvider(
-      create: (context) => AuthBloc(loginUseCase, registerUseCase),
+      create: (context) => AuthBloc(
+        loginUseCase,
+        registerUseCase,
+        logoutUseCase,
+        checkAuthStatusUseCase,
+      ),
       child: MaterialApp(
         title: 'VolunUPT',
         theme: ThemeData(
@@ -50,7 +61,6 @@ class MyApp extends StatelessWidget {
           '/inscripciones': (context) => const InscripcionesScreen(),
           '/detalle': (context) => const DetalleCampaignScreen(),
           '/qr_attendance': (context) => const QRAttendanceScreen(),
-          //DIVIDIDO LISTA DE ASISTENCIA
           '/attendance_list': (context) => const AttendanceListScreen(),
         },
       ),

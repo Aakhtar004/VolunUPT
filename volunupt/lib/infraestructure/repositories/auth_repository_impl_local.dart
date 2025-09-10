@@ -22,6 +22,7 @@ class AuthRepositoryImplLocal implements AuthRepository {
     await storage.write(key: 'user_id', value: user.id);
     await storage.write(key: 'user_email', value: user.email);
     await storage.write(key: 'user_role', value: user.role);
+    await storage.write(key: 'user_fullName', value: user.fullName);
 
     debugPrint('Repository Local: Login completado');
     return user;
@@ -37,6 +38,7 @@ class AuthRepositoryImplLocal implements AuthRepository {
     await storage.write(key: 'user_id', value: user.id);
     await storage.write(key: 'user_email', value: user.email);
     await storage.write(key: 'user_role', value: user.role);
+    await storage.write(key: 'user_fullName', value: user.fullName);
 
     debugPrint('Repository Local: Registro completado');
     return user;
@@ -49,6 +51,7 @@ class AuthRepositoryImplLocal implements AuthRepository {
     await storage.delete(key: 'user_id');
     await storage.delete(key: 'user_email');
     await storage.delete(key: 'user_role');
+    await storage.delete(key: 'user_fullName');
   }
 
   @override
@@ -56,8 +59,13 @@ class AuthRepositoryImplLocal implements AuthRepository {
     return await storage.read(key: 'token');
   }
 
-  // Método adicional para obtener el role del usuario
+  @override
   Future<String?> getUserRole() async {
     return await storage.read(key: 'user_role');
+  }
+
+  @override
+  Future<String?> getUserFullName() async {
+    return await storage.read(key: 'user_fullName');
   }
 }

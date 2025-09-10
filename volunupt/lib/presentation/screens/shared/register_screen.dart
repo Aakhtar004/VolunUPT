@@ -2,19 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:volunupt/application/blocs/auth_bloc.dart';
 
-class RegisterScreen extends StatelessWidget {
+class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final emailController = TextEditingController();
-    final passwordController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
-    final fullNameController = TextEditingController();
+  State<RegisterScreen> createState() => _RegisterScreenState();
+}
 
+class _RegisterScreenState extends State<RegisterScreen> {
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
+  final fullNameController = TextEditingController();
+  String selectedRole = 'Estudiante';
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Crear Cuenta'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
       ),
@@ -23,12 +28,12 @@ class RegisterScreen extends StatelessWidget {
           if (state is AuthRegistered) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('¡Registro exitoso! Bienvenido'),
+                content: Text('¡Registro exitoso! Ahora puedes iniciar sesión'),
                 backgroundColor: Colors.green,
               ),
             );
-            // Navegar a home o login
-            Navigator.pushReplacementNamed(context, '/home');
+            // Navegar al login después del registro exitoso
+            Navigator.pushReplacementNamed(context, '/login');
           } else if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -108,6 +113,44 @@ class RegisterScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
+                // Selector de Rol
+                const Text(
+                  'Selecciona tu rol:',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Column(
+                    children: [
+                      RadioListTile<String>(
+                        title: const Text('Estudiante'),
+                        value: 'Estudiante',
+                        groupValue: selectedRole,
+                        onChanged: (value) {
+                          setState(() {
+                            selectedRole = value!;
+                          });
+                        },
+                      ),
+                      RadioListTile<String>(
+                        title: const Text('Coordinador'),
+                        value: 'Coordinador',
+                        groupValue: selectedRole,
+                        onChanged: (value) {
+                          setState(() {
+                            selectedRole = value!;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
                 // Botón de Registro
                 SizedBox(
                   width: double.infinity,
@@ -122,6 +165,7 @@ class RegisterScreen extends StatelessWidget {
                                 password: passwordController.text,
                                 confirmPassword: confirmPasswordController.text,
                                 fullName: fullNameController.text.trim(),
+                                role: selectedRole,
                               ),
                             );
                           },

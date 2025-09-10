@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:volunupt/application/blocs/auth_bloc.dart';
 import 'package:volunupt/presentation/widgets/bottom_nav_bar.dart';
-import 'package:volunupt/presentation/screens/catalog_screen.dart';
-import 'package:volunupt/presentation/screens/inscripciones_screen.dart';
-import 'package:volunupt/presentation/screens/certificados_screen.dart';
-import 'package:volunupt/presentation/screens/perfil_screen.dart';
+import 'package:volunupt/presentation/screens/estudiante/catalog_screen.dart';
+import 'package:volunupt/presentation/screens/estudiante/inscripciones_screen.dart';
+import 'package:volunupt/presentation/screens/estudiante/certificados_screen.dart';
+import 'package:volunupt/presentation/screens/shared/perfil_screen.dart';
 
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
