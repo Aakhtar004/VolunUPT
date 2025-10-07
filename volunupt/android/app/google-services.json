@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "797331298645",
+    "project_id": "volunupt",
+    "storage_bucket": "volunupt.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:797331298645:android:3c818897e01afd3cba77dc",
+        "android_client_info": {
+          "package_name": "com.example.volunupt"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDgTz6NrDqY-zJR6rC4phNzVE35IyEcNng"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

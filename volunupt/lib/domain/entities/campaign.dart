@@ -1,50 +1,69 @@
-import 'package:equatable/equatable.dart';
-
-class Campaign extends Equatable {
+class Campaign {
   final String id;
   final String title;
   final String description;
-  final String date;
-  final String location;
-  final String imageAsset;
+  final DateTime startDate;
+  final DateTime endDate;
   final String status;
-  final String coordinatorName;
-  final String coordinatorEmail;
-  final int availableSpots;
-  final int totalSpots;
-  final List<String> requirements;
-  final int rsuHours;
+  final String coordinatorId;
+  final List<String> participantIds;
 
   const Campaign({
     required this.id,
     required this.title,
     required this.description,
-    required this.date,
-    required this.location,
-    required this.imageAsset,
+    required this.startDate,
+    required this.endDate,
     required this.status,
-    required this.coordinatorName,
-    required this.coordinatorEmail,
-    required this.availableSpots,
-    required this.totalSpots,
-    required this.requirements,
-    required this.rsuHours,
+    required this.coordinatorId,
+    required this.participantIds,
   });
 
+  Campaign copyWith({
+    String? id,
+    String? title,
+    String? description,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? status,
+    String? coordinatorId,
+    List<String>? participantIds,
+  }) {
+    return Campaign(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      status: status ?? this.status,
+      coordinatorId: coordinatorId ?? this.coordinatorId,
+      participantIds: participantIds ?? this.participantIds,
+    );
+  }
+
   @override
-  List<Object?> get props => [
-    id,
-    title,
-    description,
-    date,
-    location,
-    imageAsset,
-    status,
-    coordinatorName,
-    coordinatorEmail,
-    availableSpots,
-    totalSpots,
-    requirements,
-    rsuHours,
-  ];
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Campaign &&
+        other.id == id &&
+        other.title == title &&
+        other.description == description &&
+        other.startDate == startDate &&
+        other.endDate == endDate &&
+        other.status == status &&
+        other.coordinatorId == coordinatorId &&
+        other.participantIds == participantIds;
+  }
+
+  @override
+  int get hashCode {
+    return id.hashCode ^
+        title.hashCode ^
+        description.hashCode ^
+        startDate.hashCode ^
+        endDate.hashCode ^
+        status.hashCode ^
+        coordinatorId.hashCode ^
+        participantIds.hashCode;
+  }
 }
