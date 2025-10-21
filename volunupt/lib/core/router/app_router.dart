@@ -21,14 +21,35 @@ import '../../features/admin/presentation/screens/admin_dashboard_screen.dart';
 import '../../features/admin/presentation/screens/admin_users_screen.dart';
 import '../../features/admin/presentation/screens/admin_events_screen.dart';
 import '../../features/admin/presentation/screens/admin_reports_screen.dart';
+import '../../features/admin/presentation/screens/admin_settings_screen.dart';
+import '../../features/admin/presentation/screens/admin_notifications_screen.dart';
+import '../../features/events/presentation/screens/create_event_screen.dart';
+import '../../features/events/presentation/screens/edit_event_screen.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
+import '../widgets/splash_screen.dart';
+import '../providers/app_state_providers.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authNotifierProvider);
+  final appState = ref.watch(appInitializationProvider);
 
   return GoRouter(
-    initialLocation: '/login',
+    initialLocation: '/splash',
     redirect: (context, state) {
+      final isSplash = state.matchedLocation == '/splash';
+      
+      if (isSplash && !appState.hasShownSplash) {
+        return null;
+      }
+      
+      if (isSplash && appState.hasShownSplash) {
+        return authState.when(
+          data: (user) => user != null ? '/home' : '/login',
+          loading: () => null,
+          error: (_, __) => '/login',
+        );
+      }
+      
       return authState.when(
         data: (user) {
           final isAuthenticated = user != null;
@@ -42,9 +63,27 @@ final routerProvider = Provider<GoRouter>((ref) {
             return '/home';
           }
 
+          if (isAuthenticated && user != null) {
+            final userRole = user.role.toLowerCase();
+            final currentPath = state.matchedLocation;
+            
+            if (currentPath.startsWith('/admin')) {
+              if (!['admin', 'coordinador', 'gestor_rsu'].contains(userRole)) {
+                return '/home';
+              }
+            }
+            
+            if (currentPath.startsWith('/my-events') || 
+                currentPath.startsWith('/certificates')) {
+              if (userRole != 'estudiante') {
+                return '/admin';
+              }
+            }
+          }
+
           return null;
         },
-        loading: () => null,
+        loading: () => '/splash',
         error: (error, stackTrace) {
           final isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
           if (!isLoggingIn) {
@@ -55,6 +94,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        name: 'splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
       GoRoute(
         path: '/login',
         name: 'login',
@@ -142,6 +186,34 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/admin/reports',
             name: 'admin-reports',
             builder: (context, state) => const AdminReportsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/settings',
+            name: 'admin-settings',
+            builder: (context, state) => const AdminSettingsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/notifications',
+            name: 'admin-notifications',
+            builder: (context, state) => const AdminNotificationsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/events/create',
+            name: 'admin-create-event',
+            builder: (context, state) => const CreateEventScreen(),
+          ),
+          GoRoute(
+            path: '/create-event',
+            name: 'create-event',
+            builder: (context, state) => const CreateEventScreen(),
+          ),
+          GoRoute(
+            path: '/edit-event/:eventId',
+            name: 'edit-event',
+            builder: (context, state) {
+              final eventData = state.extra as EventEntity;
+              return EditEventScreen(event: eventData);
+            },
           ),
         ],
       ),

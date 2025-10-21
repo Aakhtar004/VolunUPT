@@ -8,4 +8,9 @@ abstract class EventsRepository {
   Future<List<InscriptionEntity>> getUserInscriptions(String userId);
   Future<bool> isUserInscribed(String eventId, String userId);
   Future<void> markAttendance(String eventId, String qrCode);
+  
+  // CRUD operations for admin
+  Future<String> createEvent(EventEntity event);
+  Future<void> updateEvent(EventEntity event);
+  Future<void> deleteEvent(String eventId);
 }

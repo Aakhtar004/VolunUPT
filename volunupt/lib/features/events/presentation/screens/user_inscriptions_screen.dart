@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/events_providers.dart';
 import '../../domain/entities/inscription_status_entity.dart';
+import '../../../../core/widgets/async_value_widget.dart';
+import '../../../../core/widgets/empty_state_widget.dart';
 
 class UserInscriptionsScreen extends ConsumerStatefulWidget {
   const UserInscriptionsScreen({super.key});
@@ -75,28 +77,30 @@ class _UserInscriptionsScreenState extends ConsumerState<UserInscriptionsScreen>
               ),
             ],
           ),
-          inscriptionsAsync.when(
-            loading: () => const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()),
+          SliverFillRemaining(
+            child: ConnectivityAwareWidget(
+              child: AsyncValueListWidget(
+                value: inscriptionsAsync,
+                data: (inscriptions) {
+                  return CustomScrollView(
+                    slivers: [
+                      SliverList(
+                        delegate: SliverChildListDelegate([
+                          _buildStatsSection(inscriptions),
+                          _buildFilterSection(),
+                          _buildInscriptionsList(inscriptions),
+                        ]),
+                      ),
+                    ],
+                  );
+                },
+                loadingMessage: 'Cargando inscripciones...',
+                emptyTitle: 'No tienes inscripciones',
+                emptyMessage: 'Explora el catálogo de eventos para inscribirte en actividades de voluntariado',
+                emptyIcon: Icons.event_note,
+                onRetry: () => ref.read(inscriptionsNotifierProvider(currentUser.id).notifier).refreshInscriptions(),
+              ),
             ),
-            error: (error, stackTrace) => SliverFillRemaining(
-              child: _buildErrorState(error),
-            ),
-            data: (inscriptions) {
-              if (inscriptions.isEmpty) {
-                return SliverFillRemaining(
-                  child: _buildEmptyState(),
-                );
-              }
-
-              return SliverList(
-                delegate: SliverChildListDelegate([
-                  _buildStatsSection(inscriptions),
-                  _buildFilterSection(),
-                  _buildInscriptionsList(inscriptions),
-                ]),
-              );
-            },
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/certificates_providers.dart';
 import '../../domain/entities/certificate_entity.dart';
@@ -311,7 +312,7 @@ class _CertificateCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {},
+                      onPressed: () => _viewCertificate(context, certificate),
                       icon: const Icon(Icons.visibility),
                       label: const Text('Ver'),
                     ),
@@ -319,7 +320,7 @@ class _CertificateCard extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () {},
+                      onPressed: () => _downloadCertificate(context, certificate),
                       icon: const Icon(Icons.download),
                       label: const Text('Descargar'),
                     ),
@@ -329,6 +330,61 @@ class _CertificateCard extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _viewCertificate(BuildContext context, CertificateEntity certificate) async {
+    try {
+      if (certificate.fileUrl.isNotEmpty) {
+        final uri = Uri.parse(certificate.fileUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          if (context.mounted) {
+            _showErrorSnackBar(context, 'No se puede abrir el certificado');
+          }
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        _showErrorSnackBar(context, 'Error al abrir el certificado: $e');
+      }
+    }
+  }
+
+  Future<void> _downloadCertificate(BuildContext context, CertificateEntity certificate) async {
+    try {
+      if (certificate.fileUrl.isNotEmpty) {
+        final uri = Uri.parse(certificate.fileUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Descarga iniciada'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          if (context.mounted) {
+            _showErrorSnackBar(context, 'No se puede descargar el certificado');
+          }
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        _showErrorSnackBar(context, 'Error al descargar el certificado: $e');
+      }
+    }
+  }
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
       ),
     );
   }

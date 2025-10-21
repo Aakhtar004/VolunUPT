@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../domain/entities/user_profile_entity.dart';
 import '../providers/profile_providers.dart';
+import '../../domain/entities/user_profile_entity.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../../core/utils/form_validators.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -38,7 +39,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         _phoneController.text = profile.phone ?? '';
         _studentCodeController.text = profile.studentCode ?? '';
         _careerController.text = profile.career ?? '';
-        _semesterController.text = profile.semester?.toString() ?? '';
+        _semesterController.text = profile.semester.toString();
       }
     });
   }
@@ -164,18 +165,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               label: 'Teléfono',
               icon: Icons.phone,
               keyboardType: TextInputType.phone,
+              validator: FormValidators.validatePhone,
             ),
             const SizedBox(height: 16),
             _buildTextField(
               controller: _studentCodeController,
               label: 'Código de estudiante',
               icon: Icons.badge,
+              validator: FormValidators.validateStudentCode,
             ),
             const SizedBox(height: 16),
             _buildTextField(
               controller: _careerController,
               label: 'Carrera',
               icon: Icons.school,
+              validator: FormValidators.validateCareer,
             ),
             const SizedBox(height: 16),
             _buildTextField(
@@ -183,6 +187,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               label: 'Semestre',
               icon: Icons.grade,
               keyboardType: TextInputType.number,
+              validator: FormValidators.validateSemester,
             ),
             const SizedBox(height: 32),
           ],

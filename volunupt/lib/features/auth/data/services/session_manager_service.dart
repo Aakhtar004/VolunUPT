@@ -5,15 +5,21 @@ import 'package:firebase_auth/firebase_auth.dart';
 class SessionManagerService {
   static const String _lastActivityKey = 'last_activity';
   static const String _sessionTimeoutKey = 'session_timeout';
-  static const Duration _defaultSessionTimeout = Duration(hours: 24);
-  static const Duration _inactivityTimeout = Duration(minutes: 30);
+  static const String _userDataKey = 'cached_user_data';
+  static const String _appStateKey = 'app_state_data';
+  
+  static const Duration _defaultSessionTimeout = Duration(hours: 8);
+  static const Duration _inactivityTimeout = Duration(minutes: 15);
+  static const Duration _warningBeforeTimeout = Duration(minutes: 2);
   
   final FlutterSecureStorage _secureStorage;
   final FirebaseAuth _firebaseAuth;
   
   Timer? _inactivityTimer;
   Timer? _sessionCheckTimer;
+  Timer? _warningTimer;
   DateTime? _lastActivity;
+  bool _warningShown = false;
   
   final StreamController<SessionEvent> _sessionEventController = 
       StreamController<SessionEvent>.broadcast();
@@ -50,11 +56,22 @@ class SessionManagerService {
     final now = DateTime.now();
     
     final timeSinceLastActivity = now.difference(lastActivity);
+    final timeUntilTimeout = _inactivityTimeout - timeSinceLastActivity;
     
     if (timeSinceLastActivity > _inactivityTimeout) {
       await _handleInactivityTimeout();
     } else if (timeSinceLastActivity > _defaultSessionTimeout) {
       await _handleSessionExpired();
+    } else if (timeUntilTimeout <= _warningBeforeTimeout && !_warningShown) {
+      _warningShown = true;
+      _sessionEventController.add(SessionEvent.inactivityWarning);
+      
+      _warningTimer?.cancel();
+      _warningTimer = Timer(_warningBeforeTimeout, () async {
+        if (_warningShown) {
+          await _handleInactivityTimeout();
+        }
+      });
     }
   }
   
@@ -68,13 +85,27 @@ class SessionManagerService {
   }
   
   Future<void> _clearSession() async {
-    await _secureStorage.delete(key: _lastActivityKey);
-    await _secureStorage.delete(key: _sessionTimeoutKey);
+    _inactivityTimer?.cancel();
+    _sessionCheckTimer?.cancel();
+    _warningTimer?.cancel();
+    
+    await Future.wait([
+      _secureStorage.delete(key: _lastActivityKey),
+      _secureStorage.delete(key: _sessionTimeoutKey),
+      _secureStorage.delete(key: _userDataKey),
+      _secureStorage.delete(key: _appStateKey),
+      _secureStorage.deleteAll(),
+    ]);
+    
     await _firebaseAuth.signOut();
+    _warningShown = false;
+    _lastActivity = null;
   }
   
   void updateActivity() {
     _updateLastActivity();
+    _warningShown = false;
+    _warningTimer?.cancel();
     _resetInactivityTimer();
   }
   
@@ -122,6 +153,10 @@ class SessionManagerService {
     _inactivityTimer?.cancel();
     _sessionCheckTimer?.cancel();
     _sessionEventController.add(SessionEvent.sessionEnded);
+  }
+  
+  Future<void> clearAllUserData() async {
+    await _clearSession();
   }
   
   void dispose() {

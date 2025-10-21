@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/auth_providers.dart';
+import '../../../../core/utils/form_validators.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -110,15 +111,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     prefixIcon: Icon(Icons.person),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingresa tu nombre';
-                    }
-                    if (value.length < 2) {
-                      return 'El nombre debe tener al menos 2 caracteres';
-                    }
-                    return null;
-                  },
+                  validator: FormValidators.validateName,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -129,15 +122,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     prefixIcon: Icon(Icons.email),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingresa tu correo';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Por favor ingresa un correo válido';
-                    }
-                    return null;
-                  },
+                  validator: FormValidators.validateEmail,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -156,15 +141,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     border: const OutlineInputBorder(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingresa una contraseña';
-                    }
-                    if (value.length < 6) {
-                      return 'La contraseña debe tener al menos 6 caracteres';
-                    }
-                    return null;
-                  },
+                  validator: FormValidators.validatePassword,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -183,15 +160,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     border: const OutlineInputBorder(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor confirma tu contraseña';
-                    }
-                    if (value != _passwordController.text) {
-                      return 'Las contraseñas no coinciden';
-                    }
-                    return null;
-                  },
+                  validator: (value) => FormValidators.validateConfirmPassword(value, _passwordController.text),
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(

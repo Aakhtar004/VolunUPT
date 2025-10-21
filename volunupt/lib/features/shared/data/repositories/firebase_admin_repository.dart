@@ -558,10 +558,126 @@ class FirebaseAdminRepository implements AdminRepository {
   Future<Map<String, dynamic>> getUserAnalytics(String userId) => throw UnimplementedError();
 
   @override
-  Future<void> sendNotificationToUser(String userId, String title, String message) => throw UnimplementedError();
+  Future<void> sendNotificationToUser(String userId, String title, String message) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists) {
+        throw Exception('Usuario no encontrado');
+      }
+
+      final userData = userDoc.data()!;
+      final fcmToken = userData['fcmToken'] as String?;
+
+      await _firestore.collection('notifications').add({
+        'userId': userId,
+        'title': title,
+        'message': message,
+        'type': 'admin',
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'sentBy': _auth.currentUser?.uid,
+        'sentByName': _auth.currentUser?.displayName ?? 'Administrador',
+      });
+
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        await _firestore.collection('fcm_messages').add({
+          'token': fcmToken,
+          'title': title,
+          'body': message,
+          'data': {
+            'type': 'admin_notification',
+            'userId': userId,
+          },
+          'createdAt': FieldValue.serverTimestamp(),
+          'processed': false,
+        });
+      }
+
+      await _logActivity(ActivityLog(
+        id: '',
+        type: 'notification_sent',
+        description: 'Notificación enviada: $title',
+        userId: _auth.currentUser?.uid ?? '',
+        userName: _auth.currentUser?.displayName,
+        targetId: userId,
+        targetType: 'user',
+        timestamp: DateTime.now(),
+        metadata: {
+          'title': title,
+          'message': message,
+        },
+        severity: 'info',
+      ));
+    } catch (e) {
+      throw Exception('Error al enviar notificación: $e');
+    }
+  }
 
   @override
-  Future<void> sendBulkNotification(List<String> userIds, String title, String message) => throw UnimplementedError();
+  Future<void> sendBulkNotification(List<String> userIds, String title, String message) async {
+    try {
+      final batch = _firestore.batch();
+      final fcmTokens = <String>[];
+
+      for (final userId in userIds) {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          final userData = userDoc.data()!;
+          final fcmToken = userData['fcmToken'] as String?;
+          
+          if (fcmToken != null && fcmToken.isNotEmpty) {
+            fcmTokens.add(fcmToken);
+          }
+
+          final notificationRef = _firestore.collection('notifications').doc();
+          batch.set(notificationRef, {
+            'userId': userId,
+            'title': title,
+            'message': message,
+            'type': 'admin_bulk',
+            'isRead': false,
+            'createdAt': FieldValue.serverTimestamp(),
+            'sentBy': _auth.currentUser?.uid,
+            'sentByName': _auth.currentUser?.displayName ?? 'Administrador',
+          });
+        }
+      }
+
+      await batch.commit();
+
+      for (final token in fcmTokens) {
+        await _firestore.collection('fcm_messages').add({
+          'token': token,
+          'title': title,
+          'body': message,
+          'data': {
+            'type': 'admin_bulk_notification',
+          },
+          'createdAt': FieldValue.serverTimestamp(),
+          'processed': false,
+        });
+      }
+
+      await _logActivity(ActivityLog(
+        id: '',
+        type: 'bulk_notification_sent',
+        description: 'Notificación masiva enviada a ${userIds.length} usuarios: $title',
+        userId: _auth.currentUser?.uid ?? '',
+        userName: _auth.currentUser?.displayName,
+        targetId: '',
+        targetType: 'bulk',
+        timestamp: DateTime.now(),
+        metadata: {
+          'title': title,
+          'message': message,
+          'userCount': userIds.length,
+        },
+        severity: 'info',
+      ));
+    } catch (e) {
+      throw Exception('Error al enviar notificación masiva: $e');
+    }
+  }
 
   @override
   Future<Map<String, dynamic>> exportData(String dataType, DateTime? startDate, DateTime? endDate) => throw UnimplementedError();

@@ -195,4 +195,61 @@ class FirebaseEventsRepository implements EventsRepository {
       throw Exception('Error registrando asistencia: $e');
     }
   }
+
+  @override
+  Future<String> createEvent(EventEntity event) async {
+    try {
+      final docRef = await _firestore.collection('events').add({
+        'title': event.title,
+        'description': event.description,
+        'start_date': Timestamp.fromDate(event.startDate),
+        'capacity': event.capacity,
+        'inscription_count': 0,
+        'status': 'active',
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+      
+      return docRef.id;
+    } catch (e) {
+      throw Exception('Error al crear evento: $e');
+    }
+  }
+
+  @override
+  Future<void> updateEvent(EventEntity event) async {
+    try {
+      await _firestore.collection('events').doc(event.id).update({
+        'title': event.title,
+        'description': event.description,
+        'start_date': Timestamp.fromDate(event.startDate),
+        'capacity': event.capacity,
+        'status': event.status,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Error al actualizar evento: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteEvent(String eventId) async {
+    try {
+      // Delete all inscriptions first
+      final inscriptionsSnapshot = await _firestore
+          .collection('events')
+          .doc(eventId)
+          .collection('inscriptions')
+          .get();
+      
+      for (final doc in inscriptionsSnapshot.docs) {
+        await doc.reference.delete();
+      }
+      
+      // Delete the event
+      await _firestore.collection('events').doc(eventId).delete();
+    } catch (e) {
+      throw Exception('Error al eliminar evento: $e');
+    }
+  }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/providers/auth_providers.dart';
+import '../utils/form_validators.dart';
 
 class SessionDialog {
   static void showInactivityWarning(BuildContext context, WidgetRef ref) {
@@ -60,12 +61,7 @@ class SessionDialog {
                   labelText: 'Correo electrónico',
                   border: OutlineInputBorder(),
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Ingresa tu correo electrónico';
-                  }
-                  return null;
-                },
+                validator: FormValidators.validateEmail,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -75,12 +71,7 @@ class SessionDialog {
                   border: OutlineInputBorder(),
                 ),
                 obscureText: true,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Ingresa tu contraseña';
-                  }
-                  return null;
-                },
+                validator: FormValidators.validatePassword,
               ),
             ],
           ),

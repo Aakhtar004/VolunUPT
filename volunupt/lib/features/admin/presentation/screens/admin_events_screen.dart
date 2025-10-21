@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-
-import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../events/domain/entities/event_entity.dart';
 import '../../../events/presentation/providers/events_providers.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../../core/widgets/async_value_widget.dart';
+import '../../../../core/widgets/empty_state_widget.dart';
 
 class AdminEventsScreen extends ConsumerStatefulWidget {
   const AdminEventsScreen({super.key});
@@ -330,102 +331,38 @@ class _AdminEventsScreenState extends ConsumerState<AdminEventsScreen> {
   }
 
   Widget _buildEventsList(BuildContext context, AsyncValue<List<EventEntity>> eventsAsync) {
-    return eventsAsync.when(
-      data: (events) {
-        final filteredEvents = _filterEvents(events);
+    return ConnectivityAwareWidget(
+      child: AsyncValueListWidget(
+        value: eventsAsync,
+        data: (events) {
+          final filteredEvents = _filterEvents(events);
 
-        if (filteredEvents.isEmpty) {
-          return Card(
-            child: Padding(
-              padding: const EdgeInsets.all(48),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.event_busy,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No se encontraron eventos',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Intenta ajustar los filtros de búsqueda',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Eventos (${filteredEvents.length})',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ...filteredEvents.map((event) => _EventCard(
-              event: event,
-              onEdit: () => context.push('/edit-event/${event.id}'),
-              onViewDetails: () => context.push('/event/${event.id}'),
-              onViewInscriptions: () => _showInscriptionsDialog(context, event),
-              onToggleStatus: () => _toggleEventStatus(event),
-              onDelete: () => _showDeleteEventDialog(context, event),
-            )),
-          ],
-        );
-      },
-      loading: () => const Card(
-        child: Padding(
-          padding: EdgeInsets.all(48),
-          child: Center(
-            child: Column(
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Cargando eventos...'),
-              ],
-            ),
-          ),
-        ),
-      ),
-      error: (error, _) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.error,
-                size: 48,
-                color: Theme.of(context).colorScheme.error,
+              Text(
+                'Eventos (${filteredEvents.length})',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Error al cargar eventos',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                error.toString(),
-                style: Theme.of(context).textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () => ref.refresh(eventsProvider),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reintentar'),
-              ),
+              ...filteredEvents.map((event) => _EventCard(
+                event: event,
+                onEdit: () => context.push('/edit-event/${event.id}', extra: event),
+                onViewDetails: () => context.push('/event/${event.id}'),
+                onViewInscriptions: () => _showInscriptionsDialog(context, event),
+                onToggleStatus: () => _toggleEventStatus(event),
+                onDelete: () => _showDeleteEventDialog(context, event),
+              )),
             ],
-          ),
-        ),
+          );
+        },
+        loadingMessage: 'Cargando eventos...',
+        emptyTitle: 'No se encontraron eventos',
+        emptyMessage: 'Intenta ajustar los filtros de búsqueda o crear un nuevo evento',
+        emptyIcon: Icons.event_busy,
+        onRetry: () => ref.refresh(eventsProvider),
       ),
     );
   }
@@ -463,15 +400,35 @@ class _AdminEventsScreenState extends ConsumerState<AdminEventsScreen> {
     }
   }
 
-  void _toggleEventStatus(EventEntity event) {
+  Future<void> _toggleEventStatus(EventEntity event) async {
     final newStatus = event.status == 'activo' ? 'completado' : 'activo';
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Estado del evento "${event.title}" cambiado a $newStatus'),
-        backgroundColor: newStatus == 'activo' ? Colors.green : Colors.orange,
-      ),
-    );
+    try {
+      final updateUsecase = ref.read(updateEventUsecaseProvider);
+      final updatedEvent = event.copyWith(status: newStatus);
+      await updateUsecase(updatedEvent);
+      
+      // Refrescar la lista de eventos
+      ref.invalidate(eventsProvider);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Estado del evento "${event.title}" cambiado a $newStatus'),
+            backgroundColor: newStatus == 'activo' ? Colors.green : Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cambiar estado: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _showDeleteEventDialog(BuildContext context, EventEntity event) {
@@ -488,14 +445,34 @@ class _AdminEventsScreenState extends ConsumerState<AdminEventsScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Evento "${event.title}" eliminado'),
-                  backgroundColor: Colors.red,
-                ),
-              );
+              
+              try {
+                final deleteUsecase = ref.read(deleteEventUsecaseProvider);
+                await deleteUsecase(event.id);
+                
+                // Refrescar la lista de eventos
+                ref.invalidate(eventsProvider);
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Evento "${event.title}" eliminado'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error al eliminar evento: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,

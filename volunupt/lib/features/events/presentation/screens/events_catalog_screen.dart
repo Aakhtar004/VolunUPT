@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../providers/events_providers.dart';
 import '../providers/event_categories_providers.dart';
+import '../../../../core/widgets/async_value_widget.dart';
+import '../../../../core/widgets/empty_state_widget.dart';
 
 class EventsCatalogScreen extends ConsumerStatefulWidget {
   const EventsCatalogScreen({super.key});
@@ -78,40 +80,46 @@ class _EventsCatalogScreenState extends ConsumerState<EventsCatalogScreen> {
               ),
             ),
           ),
-          eventsAsync.when(
-            loading: () => const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (error, stackTrace) => SliverFillRemaining(
-              child: _buildErrorState(error),
-            ),
-            data: (events) {
-              final filteredEvents = _filterEvents(events);
-              
-              if (filteredEvents.isEmpty) {
-                return SliverFillRemaining(
-                  child: _buildEmptyState(),
-                );
-              }
+          SliverFillRemaining(
+            child: ConnectivityAwareWidget(
+              child: AsyncValueListWidget(
+                value: eventsAsync,
+                data: (events) {
+                  final filteredEvents = _filterEvents(events);
+                  
+                  if (filteredEvents.isEmpty) {
+                    return EmptyStateWidget.noEvents(
+                      onActionPressed: () => context.push('/events'),
+                    );
+                  }
 
-              return SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 1,
-                    childAspectRatio: 1.8,
-                    mainAxisSpacing: 16,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final event = filteredEvents[index];
-                      return _EventCard(event: event);
-                    },
-                    childCount: filteredEvents.length,
-                  ),
-                ),
-              );
-            },
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: GridView.builder(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 1,
+                        childAspectRatio: 1.8,
+                        mainAxisSpacing: 16,
+                      ),
+                      itemCount: filteredEvents.length,
+                      itemBuilder: (context, index) {
+                        final event = filteredEvents[index];
+                        return _EventCard(event: event);
+                      },
+                    ),
+                  );
+                },
+                loadingMessage: 'Cargando eventos...',
+                emptyTitle: _searchQuery.isNotEmpty || _selectedCategoryId != null
+                    ? 'No se encontraron eventos'
+                    : 'No hay eventos disponibles',
+                emptyMessage: _searchQuery.isNotEmpty || _selectedCategoryId != null
+                    ? 'Intenta cambiar los filtros de búsqueda'
+                    : 'Los eventos aparecerán aquí cuando estén disponibles',
+                emptyIcon: Icons.event_busy,
+                onRetry: () => ref.refresh(eventsNotifierProvider),
+              ),
+            ),
           ),
         ],
       ),

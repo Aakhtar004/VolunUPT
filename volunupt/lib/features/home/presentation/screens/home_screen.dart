@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/floating_menu.dart';
 import '../../../../core/widgets/page_transition.dart';
+import '../../../../core/widgets/async_value_widget.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../profile/presentation/providers/profile_providers.dart';
 import '../../../events/presentation/providers/events_providers.dart';
@@ -68,7 +69,9 @@ class HomeScreen extends ConsumerWidget {
                         const SizedBox(height: 24),
                         _QuickStats(),
                         const SizedBox(height: 24),
-                        _QuickActions(userRole: userProfile?.role ?? 'estudiante'),
+                        _QuickActions(
+                          userRole: userProfile?.role ?? 'estudiante',
+                        ),
                       ],
                     ),
                   ),
@@ -76,20 +79,20 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stackTrace) => Center(
-              child: Text('Error cargando perfil: $error'),
-            ),
+            error: (error, stackTrace) =>
+                Center(child: Text('Error cargando perfil: $error')),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Text('Error de autenticación: $error'),
-        ),
+        error: (error, stackTrace) =>
+            Center(child: Text('Error de autenticación: $error')),
       ),
       floatingActionButton: authState.when(
-        data: (user) => user != null 
+        data: (user) => user != null
             ? userProfileAsync.when(
-                data: (userProfile) => QuickActionsMenu(userRole: userProfile?.role ?? 'estudiante'),
+                data: (userProfile) => QuickActionsMenu(
+                  userRole: userProfile?.role ?? 'estudiante',
+                ),
                 loading: () => null,
                 error: (_, __) => null,
               )
@@ -99,7 +102,6 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
-
 }
 
 class _WelcomeCard extends StatelessWidget {
@@ -143,7 +145,10 @@ class _WelcomeCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.secondaryContainer,
                         borderRadius: BorderRadius.circular(12),
@@ -151,7 +156,9 @@ class _WelcomeCard extends StatelessWidget {
                       child: Text(
                         user.role.toUpperCase(),
                         style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSecondaryContainer,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -319,7 +326,8 @@ class _QuickActionsState extends State<_QuickActions> {
         ),
         const SizedBox(height: 12),
         if (widget.userRole == 'estudiante') ..._buildStudentActions(context),
-        if (widget.userRole == 'coordinador') ..._buildCoordinatorActions(context),
+        if (widget.userRole == 'coordinador')
+          ..._buildCoordinatorActions(context),
         if (widget.userRole == 'gestor_rsu') ..._buildAdminActions(context),
       ],
     );
@@ -468,55 +476,38 @@ class _QuickActionsState extends State<_QuickActions> {
       builder: (context) => Consumer(
         builder: (context, ref, child) {
           final eventsAsync = ref.watch(eventsNotifierProvider);
-          
+
           return AlertDialog(
             title: const Text('Seleccionar Evento'),
             content: SizedBox(
               width: double.maxFinite,
               height: 300,
-              child: eventsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, stackTrace) => Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text('Error al cargar eventos', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8),
-                      Text(error.toString(), textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-                data: (events) {
-                  if (events.isEmpty) {
-                    return const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.event_busy, size: 48, color: Colors.grey),
-                          SizedBox(height: 16),
-                          Text('No hay eventos disponibles'),
-                        ],
-                      ),
-                    );
-                  }
-                  return ListView.builder(
+              child: ConnectivityAwareWidget(
+                child: AsyncValueListWidget(
+                  value: eventsAsync,
+                  data: (events) => ListView.builder(
                     itemCount: events.length,
                     itemBuilder: (context, index) {
                       final event = events[index];
                       return ListTile(
                         leading: const Icon(Icons.event),
                         title: Text(event.title),
-                        subtitle: Text(event.startDate.toString().split(' ')[0]),
+                        subtitle: Text(
+                          event.startDate.toString().split(' ')[0],
+                        ),
                         onTap: () {
                           Navigator.of(context).pop();
                           context.push('/scanner/${event.id}');
                         },
                       );
                     },
-                  );
-                },
+                  ),
+                  loadingMessage: 'Cargando eventos...',
+                  emptyTitle: 'No hay eventos disponibles',
+                  emptyMessage: 'No se encontraron eventos para escanear',
+                  emptyIcon: Icons.event_busy,
+                  onRetry: () => ref.refresh(eventsNotifierProvider),
+                ),
               ),
             ),
             actions: [
@@ -567,9 +558,9 @@ class _ActionCard extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Text(

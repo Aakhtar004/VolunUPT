@@ -5,6 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/admin_providers.dart';
+import '../../../../core/widgets/async_value_widget.dart';
+import '../../../../core/widgets/empty_state_widget.dart';
+import '../../../../core/utils/form_validators.dart';
 
 class AdminUsersScreen extends ConsumerStatefulWidget {
   const AdminUsersScreen({super.key});
@@ -919,12 +922,7 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
                 labelText: 'Nombre completo',
                 border: OutlineInputBorder(),
               ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'El nombre es requerido';
-                }
-                return null;
-              },
+              validator: FormValidators.validateName,
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -934,15 +932,7 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.emailAddress,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'El email es requerido';
-                }
-                if (!value.contains('@')) {
-                  return 'Ingresa un email válido';
-                }
-                return null;
-              },
+              validator: FormValidators.validateEmail,
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(

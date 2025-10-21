@@ -102,7 +102,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserEntity?>> {
 
   Future<void> signOut() async {
     try {
-      await _sessionManager.endSession();
+      await _sessionManager.clearAllUserData();
       await _authRepository.signOut();
       state = const AsyncValue.data(null);
     } catch (e) {

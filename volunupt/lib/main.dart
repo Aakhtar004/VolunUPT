@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/config/firebase_config.dart';
 import 'core/router/app_router.dart';
@@ -40,6 +41,16 @@ class MyApp extends ConsumerWidget {
           theme: AppTheme.lightTheme,
           routerConfig: router,
           debugShowCheckedModeBanner: false,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('es', 'ES'),
+            Locale('en', 'US'),
+          ],
+          locale: const Locale('es', 'ES'),
         ),
       ),
     );

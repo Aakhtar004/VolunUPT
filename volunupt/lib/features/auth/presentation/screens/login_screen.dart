@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/auth_providers.dart';
+import '../../../../core/utils/form_validators.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -147,15 +148,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     prefixIcon: Icon(Icons.email),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingresa tu correo';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Por favor ingresa un correo válido';
-                    }
-                    return null;
-                  },
+                  validator: FormValidators.validateEmail,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -174,15 +167,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     border: const OutlineInputBorder(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingresa tu contraseña';
-                    }
-                    if (value.length < 6) {
-                      return 'La contraseña debe tener al menos 6 caracteres';
-                    }
-                    return null;
-                  },
+                  validator: FormValidators.validatePassword,
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
