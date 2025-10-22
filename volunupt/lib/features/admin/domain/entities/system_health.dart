@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class SystemHealth {
   final String databaseStatus;
   final String authStatus;
@@ -23,10 +25,12 @@ class SystemHealth {
       authStatus: map['authStatus'] ?? 'unknown',
       storageStatus: map['storageStatus'] ?? 'unknown',
       notificationStatus: map['notificationStatus'] ?? 'unknown',
-      lastChecked: DateTime.parse(map['lastChecked']),
-      checks: (map['checks'] as List<dynamic>?)
-          ?.map((item) => HealthCheck.fromMap(item))
-          .toList() ?? [],
+      lastChecked: _parseDate(map['lastChecked']),
+      checks:
+          (map['checks'] as List<dynamic>?)
+              ?.map((item) => HealthCheck.fromMap(item))
+              .toList() ??
+          [],
       metrics: SystemMetrics.fromMap(map['metrics'] ?? {}),
     );
   }
@@ -45,9 +49,9 @@ class SystemHealth {
 
   bool get isHealthy {
     return databaseStatus == 'healthy' &&
-           authStatus == 'healthy' &&
-           storageStatus == 'healthy' &&
-           notificationStatus == 'healthy';
+        authStatus == 'healthy' &&
+        storageStatus == 'healthy' &&
+        notificationStatus == 'healthy';
   }
 
   SystemHealth copyWith({
@@ -93,7 +97,7 @@ class HealthCheck {
       service: map['service'] ?? '',
       status: map['status'] ?? 'unknown',
       message: map['message'] ?? '',
-      timestamp: DateTime.parse(map['timestamp']),
+      timestamp: _parseDate(map['timestamp']),
       responseTime: map['responseTime'] ?? 0,
       details: Map<String, dynamic>.from(map['details'] ?? {}),
     );
@@ -143,7 +147,7 @@ class SystemMetrics {
       requestsPerMinute: map['requestsPerMinute'] ?? 0,
       averageResponseTime: (map['averageResponseTime'] ?? 0.0).toDouble(),
       errorRate: map['errorRate'] ?? 0,
-      lastUpdated: DateTime.parse(map['lastUpdated']),
+      lastUpdated: _parseDate(map['lastUpdated']),
     );
   }
 
@@ -178,4 +182,15 @@ enum HealthStatus {
       orElse: () => HealthStatus.unknown,
     );
   }
+}
+
+DateTime _parseDate(dynamic value) {
+  if (value == null) return DateTime.now();
+  if (value is DateTime) return value;
+  if (value is Timestamp) return value.toDate();
+  if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+  if (value is String) {
+    return DateTime.tryParse(value) ?? DateTime.now();
+  }
+  return DateTime.now();
 }

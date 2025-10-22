@@ -47,17 +47,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     ref.listen(authNotifierProvider, (previous, next) {
       next.whenOrNull(
         data: (user) {
-          if (user != null) {
+          if (user != null && mounted) {
             context.go('/home');
           }
         },
         error: (error, stackTrace) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error.toString()),
-              backgroundColor: Colors.red,
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(error.toString()),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         },
       );
     });

@@ -819,17 +819,23 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
           .validateQrCode(qrCode, currentUser.id);
 
       if (qrEntity != null) {
-        setState(() {
-          scannedCount++;
-          recentScans.insert(0, qrCode);
-          if (recentScans.length > 5) {
-            recentScans.removeLast();
-          }
-        });
+        if (mounted) {
+          setState(() {
+            scannedCount++;
+            recentScans.insert(0, qrCode);
+            if (recentScans.length > 5) {
+              recentScans.removeLast();
+            }
+          });
+        }
 
-        _successController.forward().then((_) {
-          _successController.reset();
-        });
+        if (mounted) {
+          _successController.forward().then((_) {
+            if (mounted) {
+              _successController.reset();
+            }
+          });
+        }
 
         _showSuccessDialog(qrEntity);
       } else {
@@ -838,9 +844,11 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
     } catch (e) {
       _showErrorDialog(e.toString());
     } finally {
-      setState(() {
-        isProcessing = false;
-      });
+      if (mounted) {
+        setState(() {
+          isProcessing = false;
+        });
+      }
     }
   }
 
@@ -1061,28 +1069,34 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
   }
 
   void _processManualQrCode(String qrCode) async {
-    setState(() {
-      isProcessing = true;
-    });
+    if (mounted) {
+      setState(() {
+        isProcessing = true;
+      });
+    }
 
     try {
       await ref.read(eventsRepositoryProvider).markAttendance(widget.eventId, qrCode);
       
-      setState(() {
-        scannedCount++;
-        recentScans.insert(0, qrCode);
-        if (recentScans.length > 5) {
-          recentScans.removeLast();
-        }
-      });
+      if (mounted) {
+        setState(() {
+          scannedCount++;
+          recentScans.insert(0, qrCode);
+          if (recentScans.length > 5) {
+            recentScans.removeLast();
+          }
+        });
+      }
 
       _showSuccessDialog(qrCode);
     } catch (e) {
       _showErrorDialog(e.toString());
     } finally {
-      setState(() {
-        isProcessing = false;
-      });
+      if (mounted) {
+        setState(() {
+          isProcessing = false;
+        });
+      }
     }
   }
 }

@@ -531,20 +531,21 @@ class _UserCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              Row(
+              // Row de chips convertido a Wrap para evitar overflow horizontal en pantallas pequeñas
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   _InfoChip(
                     icon: Icons.badge,
                     label: _getRoleDisplayName(user.role),
                     color: _getRoleColor(user.role),
                   ),
-                  const SizedBox(width: 8),
                   _InfoChip(
                     icon: Icons.event,
                     label: '${user.totalInscriptions} inscripciones',
                     color: Colors.blue,
                   ),
-                  const SizedBox(width: 8),
                   _InfoChip(
                     icon: Icons.check_circle,
                     label: '${user.attendedEvents} asistencias',
@@ -553,24 +554,31 @@ class _UserCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
+              // Reemplazar Row por combinación de Expanded + Wrap para textos de fechas y menú
               Row(
                 children: [
-                  Text(
-                    'Registrado: ${DateFormat('dd/MM/yyyy').format(user.createdAt)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  Expanded(
+                    child: Wrap(
+                      spacing: 16,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'Registrado: ${DateFormat('dd/MM/yyyy').format(user.createdAt)}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (user.lastLogin != null)
+                          Text(
+                            'Último acceso: ${DateFormat('dd/MM/yyyy').format(user.lastLogin!)}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  if (user.lastLogin != null) ...[
-                    const SizedBox(width: 16),
-                    Text(
-                      'Último acceso: ${DateFormat('dd/MM/yyyy').format(user.lastLogin!)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
                   PopupMenuButton<String>(
                     onSelected: (value) {
                       switch (value) {

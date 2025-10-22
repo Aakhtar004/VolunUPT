@@ -8,6 +8,7 @@ import '../../domain/usecases/get_admin_stats_usecase.dart';
 import '../../domain/usecases/get_recent_activity_usecase.dart';
 import '../../domain/usecases/get_system_health_usecase.dart';
 import '../../../shared/data/repositories/firebase_admin_repository.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 final adminRepositoryProvider = Provider((ref) => FirebaseAdminRepository());
 
@@ -161,14 +162,38 @@ class AdminUser {
   });
 
   factory AdminUser.fromMap(Map<String, dynamic> map) {
+    DateTime? _parseDate(dynamic value) {
+      if (value == null) return null;
+      if (value is Timestamp) return value.toDate();
+      if (value is DateTime) return value;
+      if (value is String && value.isNotEmpty) {
+        try {
+          return DateTime.parse(value);
+        } catch (_) {
+          return null;
+        }
+      }
+      if (value is int) {
+        try {
+          return DateTime.fromMillisecondsSinceEpoch(value);
+        } catch (_) {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    final createdAtRaw = map['createdAt'] ?? map['created_at'];
+    final lastLoginRaw = map['lastLogin'] ?? map['lastLoginAt'] ?? map['last_login'];
+
     return AdminUser(
       id: map['id'] ?? '',
       name: map['name'] ?? '',
       email: map['email'] ?? '',
       role: map['role'] ?? 'estudiante',
       isActive: map['isActive'] ?? true,
-      createdAt: DateTime.parse(map['createdAt']),
-      lastLogin: map['lastLogin'] != null ? DateTime.parse(map['lastLogin']) : null,
+      createdAt: _parseDate(createdAtRaw) ?? DateTime.now(),
+      lastLogin: _parseDate(lastLoginRaw),
       totalInscriptions: map['totalInscriptions'] ?? 0,
       attendedEvents: map['attendedEvents'] ?? 0,
     );

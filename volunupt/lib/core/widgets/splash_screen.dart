@@ -39,61 +39,62 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       vsync: this,
     );
 
-    _logoAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _logoController,
-      curve: Curves.elasticOut,
-    ));
+    _logoAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _logoController, curve: Curves.elasticOut),
+    );
 
-    _textAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _textController,
-      curve: Curves.easeInOut,
-    ));
+    _textAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _textController, curve: Curves.easeInOut),
+    );
 
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _logoController,
-      curve: const Interval(0.0, 0.5, curve: Curves.easeIn),
-    ));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _logoController,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeIn),
+      ),
+    );
   }
 
   void _startSplashSequence() async {
     await Future.delayed(const Duration(milliseconds: 300));
-    _logoController.forward();
-    
+    if (!mounted) return;
+    if (_logoController.isDismissed || _logoController.value == 0.0) {
+      _logoController.forward();
+    }
+
     await Future.delayed(const Duration(milliseconds: 600));
-    _textController.forward();
-    
+    if (!mounted) return;
+    if (_textController.isDismissed || _textController.value == 0.0) {
+      _textController.forward();
+    }
+
     await Future.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
     _navigateToNextScreen();
   }
 
   void _navigateToNextScreen() {
+    if (!mounted) return;
     ref.read(appInitializationProvider.notifier).markAsInitialized();
-    
+
     final authState = ref.read(authNotifierProvider);
-    
+
     authState.when(
       data: (user) {
+        if (!mounted) return;
         if (user != null) {
           context.go('/home');
         } else {
           context.go('/login');
         }
       },
-      loading: () {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          _navigateToNextScreen();
-        });
+      loading: () async {
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (!mounted) return;
+        _navigateToNextScreen();
       },
       error: (_, __) {
+        if (!mounted) return;
         context.go('/login');
       },
     );

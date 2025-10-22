@@ -67,8 +67,10 @@ class HomeScreen extends ConsumerWidget {
                       children: [
                         _WelcomeCard(user: userProfile),
                         const SizedBox(height: 24),
-                        _QuickStats(),
-                        const SizedBox(height: 24),
+                        if (userProfile?.role != 'gestor_rsu') ...[
+                          _QuickStats(),
+                          const SizedBox(height: 24),
+                        ],
                         _QuickActions(
                           userRole: userProfile?.role ?? 'estudiante',
                         ),

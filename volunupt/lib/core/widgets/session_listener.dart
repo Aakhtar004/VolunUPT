@@ -41,7 +41,9 @@ class _SessionListenerState extends ConsumerState<SessionListener> {
           break;
         case SessionEvent.sessionExpired:
           ref.read(authNotifierProvider.notifier).signOut();
-          context.go('/login');
+          if (mounted) {
+            context.go('/login');
+          }
           break;
         case SessionEvent.sessionEnded:
           break;

@@ -23,9 +23,14 @@ class FirebaseEventsRepository implements EventsRepository {
           title: data['title'] ?? '',
           description: data['description'] ?? '',
           startDate: (data['start_date'] as Timestamp).toDate(),
+          endDate: data['end_date'] != null ? (data['end_date'] as Timestamp).toDate() : null,
+          location: data['location'],
           capacity: data['capacity'] ?? 0,
           inscriptionCount: data['inscription_count'] ?? 0,
           status: data['status'] ?? '',
+          volunteerHours: data['volunteer_hours'] ?? 0,
+          categoryId: data['category_id'],
+          imageUrl: data['image_url'],
         );
       }).toList();
 
@@ -48,9 +53,14 @@ class FirebaseEventsRepository implements EventsRepository {
         title: data['title'] ?? '',
         description: data['description'] ?? '',
         startDate: (data['start_date'] as Timestamp).toDate(),
+        endDate: data['end_date'] != null ? (data['end_date'] as Timestamp).toDate() : null,
+        location: data['location'],
         capacity: data['capacity'] ?? 0,
         inscriptionCount: data['inscription_count'] ?? 0,
         status: data['status'] ?? '',
+        volunteerHours: data['volunteer_hours'] ?? 0,
+        categoryId: data['category_id'],
+        imageUrl: data['image_url'],
       );
     } catch (e) {
       throw Exception('Error al obtener evento: $e');
@@ -223,8 +233,13 @@ class FirebaseEventsRepository implements EventsRepository {
         'title': event.title,
         'description': event.description,
         'start_date': Timestamp.fromDate(event.startDate),
+        'end_date': event.endDate != null ? Timestamp.fromDate(event.endDate!) : null,
+        'location': event.location,
         'capacity': event.capacity,
         'status': event.status,
+        'volunteer_hours': event.volunteerHours,
+        'category_id': event.categoryId,
+        'image_url': event.imageUrl,
         'updated_at': FieldValue.serverTimestamp(),
       });
     } catch (e) {

@@ -56,7 +56,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
   @override
   void didUpdateWidget(MainLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentPath != widget.currentPath) {
+    if (oldWidget.currentPath != widget.currentPath && mounted) {
       _animationController.reset();
       _animationController.forward();
     }

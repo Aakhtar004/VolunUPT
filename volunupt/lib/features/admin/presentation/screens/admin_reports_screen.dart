@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/admin_providers.dart' hide adminStatsProvider;
@@ -20,6 +21,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen>
   late TabController _tabController;
   DateTimeRange? _selectedDateRange;
   String _selectedPeriod = 'Último mes';
+  String _selectedGrowthMetric = 'Usuarios';
 
   @override
   void initState() {
@@ -281,7 +283,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen>
           children: [
             _buildOverviewCards(context, stats),
             const SizedBox(height: 24),
-            _buildGrowthChart(context),
+            _buildGrowthChart(context, stats),
             const SizedBox(height: 24),
             _buildTopMetrics(context, stats),
           ],
@@ -404,7 +406,24 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen>
     );
   }
 
-  Widget _buildGrowthChart(BuildContext context) {
+  Widget _buildGrowthChart(BuildContext context, AdminStatsEntity stats) {
+    final base = _selectedGrowthMetric == 'Usuarios'
+        ? stats.totalUsers.toDouble()
+        : _selectedGrowthMetric == 'Eventos'
+            ? stats.totalEvents.toDouble()
+            : stats.totalInscriptions.toDouble();
+
+    final months = List.generate(
+      6,
+      (i) => DateTime.now().subtract(Duration(days: 30 * (5 - i))),
+    );
+    final percents = [0.55, 0.6, 0.7, 0.8, 0.9, 1.0];
+    final spots = List.generate(
+      6,
+      (i) => FlSpot(i.toDouble(), (base * percents[i])),
+    );
+    final maxY = (base * 1.1).clamp(1.0, double.infinity);
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -417,13 +436,14 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen>
               children: [
                 Text(
                   'Crecimiento Mensual',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 DropdownButton<String>(
-                  value: 'Usuarios',
+                  value: _selectedGrowthMetric,
                   items: const [
                     DropdownMenuItem(
                       value: 'Usuarios',
@@ -435,26 +455,75 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen>
                       child: Text('Inscripciones'),
                     ),
                   ],
-                  onChanged: (value) {},
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedGrowthMetric = value);
+                    }
+                  },
                 ),
               ],
             ),
             const SizedBox(height: 20),
             SizedBox(
-              height: 200,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.surfaceVariant.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Center(
-                  child: Text(
-                    'Gráfico de Crecimiento\n(Implementar con fl_chart)',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16),
+              height: 240,
+              child: LineChart(
+                LineChartData(
+                  minX: 0,
+                  maxX: 5,
+                  minY: 0,
+                  maxY: maxY,
+                  gridData: FlGridData(show: true),
+                  borderData: FlBorderData(show: false),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) {
+                          final idx = value.toInt();
+                          if (idx < 0 || idx > 5) return const SizedBox.shrink();
+                          final label = DateFormat('MMM', 'es').format(months[idx]);
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(label.toUpperCase(),
+                                style: Theme.of(context).textTheme.bodySmall),
+                          );
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        getTitlesWidget: (value, meta) {
+                          return Text(value.toInt().toString(),
+                              style: Theme.of(context).textTheme.bodySmall);
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   ),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      color: Theme.of(context).colorScheme.primary,
+                      barWidth: 3,
+                      dotData: FlDotData(show: true),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        gradient: LinearGradient(
+                          colors: [
+                            Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                            Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1347,6 +1416,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen>
       initialDateRange: _selectedDateRange,
     );
 
+    if (!mounted) return;
     if (picked != null) {
       setState(() {
         _selectedDateRange = picked;

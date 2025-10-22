@@ -63,6 +63,9 @@ dependencies:
   # Utils
   uuid: ^4.5.1
   url_launcher: ^6.2.2
+  
+  # Charts
+  fl_chart: ^0.69.0
 
 dev_dependencies:
   flutter_test:
