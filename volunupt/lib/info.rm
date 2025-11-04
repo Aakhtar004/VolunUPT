@@ -1,0 +1,305 @@
+1. Análisis y Definición del Proyecto (VolunUPT)
+La idea ha evolucionado de un simple gestor de eventos a un Sistema Integral de Gestión de Programas de Voluntariado. Este enfoque es significativamente más robusto y refleja mejor las necesidades de una universidad.
+
+Puntos Fuertes del Modelo Actual
+Jerarquía Realista: El modelo Evento Base (Programa) > Subevento (Actividad) es como funciona el voluntariado (ej. un programa de reforestación tiene subeventos de capacitación, siembra y riego).
+
+Valoración Precisa: El seguimiento por horas es más justo y valioso que la simple "asistencia". Permite recompensar el esfuerzo real.
+
+Certificación Automatizada: El objetivo final de "certificar por horas acumuladas" en un programa específico (Evento Base) automatiza la tarea más tediosa para la administración de RSU.
+
+Flujo de Control (QR + Validación): El flujo de "Check-in con QR" (Estudiante) seguido de "Validación de Horas" (Coordinador) es seguro, flexible y previene fraudes.
+
+Tecnología Enfocada: Usar el stack 100% Firebase (Auth, Firestore, Storage, Functions) es una elección moderna, escalable y eficiente en costos.
+
+Consideraciones Clave
+Validación de Usuarios: Al usar solo Google Auth, la única forma de validar que un usuario pertenece a la UPT es restringiendo el inicio de sesión a un dominio de correo específico (ej. @upt.pe o @alumnos.upt.pe). Esto debe configurarse en Firebase Auth y en el código.
+
+Lógica de Negocio en el Backend: Tareas críticas como la suma de horas y la generación de certificados deben ocurrir en el backend usando Cloud Functions para garantizar la integridad de los datos y la eficiencia.
+
+2. Stack Tecnológico (Firebase)
+Todo el sistema operará sobre la plataforma de Firebase.
+
+Firebase Authentication: Para la autenticación de usuarios. Se usará exclusivamente el proveedor de Google.
+
+Cloud Firestore: Base de datos NoSQL para almacenar todos los datos (usuarios, eventos, inscripciones, asistencias).
+
+Firebase Storage: Para almacenar archivos, principalmente los certificados PDF generados y las imágenes de portada de los eventos.
+
+Cloud Functions for Firebase: Para ejecutar lógica de backend (Node.js/TypeScript) de forma segura:
+
+Generar los PDF de certificados.
+
+Sumar (agregar) horas de forma asíncrona tras la validación.
+
+Crear el documento de usuario en Firestore en el primer login.
+
+Enviar notificaciones push.
+
+Firebase Cloud Messaging (FCM): Para enviar notificaciones push (recordatorios, certificados listos).
+
+3. Flujo de Autenticación y Perfil
+Autenticación (Google Auth)
+El usuario abre la app y ve una única opción: "Ingresar con Google".
+
+El SDK de Firebase Auth inicia el flujo de Google Sign-In.
+
+Restricción Crítica: El sistema solo permitirá cuentas de Google que pertenezcan al dominio institucional de la UPT (ej. @upt.pe). Si el usuario elige una cuenta de @gmail.com, la app mostrará un error.
+
+Primer Inicio de Sesión:
+
+Tras una autenticación exitosa, una Cloud Function (con el trigger functions.auth.user().onCreate()) se disparará.
+
+Esta función creará un nuevo documento en la colección users en Firestore.
+
+Copiará los datos de Google: uid, email, displayName, photoURL.
+
+Asignará por defecto el role: "estudiante".
+
+Apartado: Perfil de Usuario (Común a todos los roles)
+Esta pantalla será visible para todos los usuarios logueados.
+
+Información Mostrada (No editable):
+
+Foto de perfil (tomada de photoURL de Google).
+
+Nombre completo (tomado de displayName de Google).
+
+Correo institucional (email).
+
+Información de la App (Calculada):
+
+Rol Actual: "Estudiante", "Coordinador" o "Administrador".
+
+Horas Totales Acumuladas: Un contador de todas las horas validadas en todos los eventos.
+
+Acciones:
+
+Cerrar Sesión: Termina la sesión de Firebase Auth.
+
+Ayuda y Soporte: (Futuro) Enlace a un formulario o contacto.
+
+Mis Certificados: Acceso directo a la lista de certificados obtenidos.
+
+4. Modelo de Datos (Colecciones Firestore)
+Estos son los modelos "definidos desde el código".
+
+users
+Almacena la información de cada usuario en la plataforma.
+
+uid (string): ID de Firebase Auth (es el ID del documento).
+
+email (string): Correo institucional.
+
+displayName (string): Nombre del usuario.
+
+photoURL (string): Link a la foto de perfil.
+
+role (string): "estudiante", "coordinador" o "admin".
+
+totalHours (number): Contador denormalizado del total de horas históricas (actualizado por Cloud Function).
+
+events (Eventos Base / Programas)
+Almacena los programas de voluntariado.
+
+eventId (string): ID del documento.
+
+title (string): "Programa de Reforestación 2025".
+
+description (string): Detalles del programa.
+
+imageUrl (string): URL de Firebase Storage de la imagen de portada.
+
+coordinatorId (string): uid del coordinador a cargo.
+
+status (string): "borrador", "publicado", "completado", "archivado".
+
+totalHoursForCertificate (number): Horas necesarias para obtener el certificado (ej. 20).
+
+subEvents (Subeventos / Actividades)
+Almacena las actividades específicas de cada Evento Base.
+
+subEventId (string): ID del documento.
+
+baseEventId (string): ID del event al que pertenece.
+
+title (string): "Capacitación", "Jornada de Siembra 1".
+
+date (timestamp): Fecha de la actividad.
+
+startTime / endTime (timestamp): Horas de la actividad.
+
+location (string): Lugar.
+
+maxVolunteers (number): Cupos disponibles.
+
+registeredCount (number): Contador de inscritos (para control de cupos).
+
+qrCodeData (string): Un UUID único generado para este subevento, será el contenido del QR.
+
+registrations (Inscripciones)
+Registra la inscripción de un estudiante a un subevento.
+
+registrationId (string): ID del documento.
+
+userId (string): uid del estudiante.
+
+subEventId (string): ID del subevento.
+
+baseEventId (string): ID del evento base (para consultas).
+
+registeredAt (timestamp): Fecha de inscripción.
+
+attendanceRecords (Registros de Asistencia)
+El núcleo del sistema. Registra el check-in y las horas.
+
+recordId (string): ID del documento.
+
+userId (string): uid del estudiante.
+
+subEventId (string): ID del subevento.
+
+baseEventId (string): ID del evento base.
+
+checkInTime (timestamp): Hora exacta del escaneo QR.
+
+status (string): "checked-in" (recién escaneado), "validated" (horas asignadas), "absent".
+
+hoursEarned (number): Horas asignadas por el coordinador (ej. 4.5).
+
+validatedBy (string): uid del coordinador que validó.
+
+validatedAt (timestamp): Hora de la validación.
+
+certificates
+Almacena los certificados generados para que el usuario los descargue.
+
+certificateId (string): ID del documento.
+
+userId (string): uid del estudiante.
+
+baseEventId (string): ID del event por el cual se emite.
+
+pdfUrl (string): URL de Firebase Storage del PDF.
+
+dateIssued (timestamp): Fecha de emisión.
+
+hoursCompleted (number): Total de horas con las que se emitió.
+
+5. Funcionalidades Detalladas por Rol
+A. Rol: Estudiante 🧑‍🎓
+Objetivo: Descubrir, participar y ser certificado por su voluntariado.
+
+Acciones:
+
+Autenticación:
+
+Iniciar sesión únicamente con su cuenta de Google UPT.
+
+Exploración:
+
+Ver un "Dashboard" con próximos subeventos inscritos y sugerencias de Eventos Base.
+
+Explorar la lista de todos los events (Programas) publicados.
+
+Filtrar eventos por categorías (si se añaden) o buscar por nombre.
+
+Inscripción:
+
+Seleccionar un Evento Base para ver su descripción y su lista de subEvents.
+
+Inscribirse a un subEvent específico (crea un doc en registrations). La app debe validar cupos (registeredCount < maxVolunteers).
+
+Cancelar una inscripción (ej. hasta 24h antes del subevento).
+
+Participación (Día del Evento):
+
+Acceder a la función de "Escanear QR" desde la app.
+
+Escanear el QR que el coordinador muestra. La app envía el userId y el qrCodeData (que identifica al subEventId) a Firebase.
+
+Se crea un registro en attendanceRecords con status: "checked-in".
+
+Seguimiento y Certificación:
+
+Ver la pantalla "Mi Progreso" para cada Evento Base en el que participa (ej. "Programa Reforestación: 12.5 / 20 horas").
+
+Recibir una notificación push cuando un coordinador valide sus horas.
+
+Recibir una notificación push cuando haya alcanzado las horas y su certificado esté listo.
+
+Acceder a la sección "Mis Certificados", ver la lista de certificates y descargar los PDF.
+
+B. Rol: Coordinador / Gestor RSU 🧑‍🏫
+Objetivo: Crear, gestionar y validar las actividades de voluntariado.
+
+Acciones:
+
+Autenticación:
+
+Iniciar sesión con su cuenta de Google UPT (que un Admin debe haber promovido a role: "coordinador").
+
+Gestión de Programas (Eventos Base):
+
+CRUD (Crear, Leer, Actualizar, Borrar) de los events (Programas) que él administra.
+
+Definir el title, description, imageUrl y, lo más importante, totalHoursForCertificate.
+
+Publicar o despublicar un Evento Base.
+
+Gestión de Actividades (Subeventos):
+
+CRUD de subEvents asociados a sus Eventos Base.
+
+Definir title, date, location, maxVolunteers, etc.
+
+Monitorear la lista de inscritos (registrations) para cada subevento.
+
+Gestión de Asistencia (Día del Evento):
+
+Seleccionar el subEvent del día.
+
+Validación de Horas (Post-Evento):
+
+Acceder a la lista de estudiantes que hicieron check-in (lee attendanceRecords con status: "checked-in" para ese subEventId).
+
+Ingresar las horas reales para cada estudiante (ej. "Ana García: 4h", "Luis Vega: 2.5h").
+
+Confirmar la validación. Esto actualiza los registros a status: "validated", guarda las hoursEarned y dispara la Cloud Function para la suma.
+
+C. Rol: Administrador 👑
+Objetivo: Supervisar la plataforma, gestionar usuarios y obtener estadísticas.
+
+Acciones:
+
+Autenticación:
+
+Iniciar sesión con su cuenta de Google UPT (con role: "admin").
+
+Gestión de Usuarios:
+
+Ver la lista completa de todos los users en la plataforma.
+
+Función Clave: Asignar Roles. El Admin es el único que puede cambiar el role de un usuario de "estudiante" a "coordinador" o "admin".
+
+Desactivar/suspender cuentas de usuario.
+
+Supervisión de Contenido:
+
+Ver, editar o eliminar cualquier event o subEvent de la plataforma, sin importar qué coordinador lo creó.
+
+Validar asistencias manualmente si un coordinador no puede hacerlo.
+
+Estadísticas y Reportes:
+
+Acceder a un Dashboard global con estadísticas:
+
+Total de horas de voluntariado de la UPT.
+
+Número de estudiantes activos.
+
+Eventos más populares.
+
+Total de certificados emitidos.
+
+(Futuro) Exportar datos a CSV para informes de RSU.

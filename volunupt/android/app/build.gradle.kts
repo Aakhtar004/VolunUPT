@@ -3,21 +3,22 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.example.volunupt"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973" // VERSION ACTUALIZADA PARA SECURE STORAGE
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        // Enable core library desugaring to support Java 8+ APIs on minSdk < 26
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -42,4 +43,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Required when coreLibraryDesugaringEnabled is true
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }

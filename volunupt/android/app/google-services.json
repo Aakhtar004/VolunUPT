@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "797331298645",
-    "project_id": "volunupt",
-    "storage_bucket": "volunupt.firebasestorage.app"
+    "project_number": "371362030185",
+    "project_id": "volunupt-5982a",
+    "storage_bucket": "volunupt-5982a.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:797331298645:android:3c818897e01afd3cba77dc",
+        "mobilesdk_app_id": "1:371362030185:android:4eb8c780a328e9bdebb8f8",
         "android_client_info": {
           "package_name": "com.example.volunupt"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "371362030185-bhrs7r2q6npivvm7v5ma420a7n6epmke.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyDgTz6NrDqY-zJR6rC4phNzVE35IyEcNng"
+          "current_key": "AIzaSyDiXRsnbTEcVkvEVohzWKX4RWLA5axgfcg"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "371362030185-bhrs7r2q6npivvm7v5ma420a7n6epmke.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
