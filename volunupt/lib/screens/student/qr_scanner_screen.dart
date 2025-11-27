@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/app_colors.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../services/auth_service.dart';
@@ -53,7 +54,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Escanear QR'),
-        backgroundColor: Theme.of(context).primaryColor,
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -96,10 +97,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     width: 300,
                     height: 300,
                     decoration: BoxDecoration(
-                      border: Border.all(
-                        color: Theme.of(context).primaryColor,
-                        width: 4,
-                      ),
+                      border: Border.all(color: AppColors.primary, width: 4),
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
@@ -127,25 +125,28 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         ),
         Expanded(
           flex: 1,
-          child: Container(
+          child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.qr_code_scanner,
-                  size: 48,
-                  color: Colors.grey,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Apunta la cámara hacia el código QR del evento',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
+            child: Container
+            (
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.qr_code_scanner, size: 36, color: AppColors.primary),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Apunta la cámara hacia el código QR del evento',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -160,11 +161,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.camera_alt_outlined,
-              size: 64,
-              color: Colors.grey,
-            ),
+            const Icon(Icons.camera_alt_outlined, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             Text(
               'Permisos de cámara requeridos',
@@ -174,9 +171,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
             const SizedBox(height: 8),
             Text(
               'Para escanear códigos QR necesitamos acceso a tu cámara.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -222,10 +219,16 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       await controller?.stop();
 
       // Verificar si el usuario puede hacer check-in
-      final canCheckIn = await AttendanceService.canUserCheckIn(_currentUserId!, qrCode);
-      
+      final canCheckIn = await AttendanceService.canUserCheckIn(
+        _currentUserId!,
+        qrCode,
+      );
+
       if (!canCheckIn['canCheckIn']) {
-        _showErrorDialog('No se puede registrar asistencia', canCheckIn['reason']);
+        _showErrorDialog(
+          'No se puede registrar asistencia',
+          canCheckIn['reason'],
+        );
         return;
       }
 
@@ -234,10 +237,13 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       if (eventInfo['isValid']) {
         _showCheckInConfirmation(qrCode, eventInfo);
       } else {
-        _showErrorDialog('Código QR inválido', eventInfo['error'] ?? 'Código no reconocido');
+        _showErrorDialog(
+          'Código QR inválido',
+          eventInfo['error'] ?? 'Código no reconocido',
+        );
       }
     } catch (e) {
-      _showErrorDialog('Error', 'Error al procesar código QR: $e');
+      _showErrorDialog('Error', 'No se pudo procesar el código QR. Inténtalo nuevamente');
     } finally {
       setState(() {
         _isProcessing = false;
@@ -270,7 +276,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               const SizedBox(height: 4),
               Text('Fecha: ${_formatDate(subEvent.startTime)}'),
               const SizedBox(height: 4),
-              Text('Hora: ${_formatTime(subEvent.startTime)} - ${_formatTime(subEvent.endTime)}'),
+              Text(
+                'Hora: ${_formatTime(subEvent.startTime)} - ${_formatTime(subEvent.endTime)}',
+              ),
               const SizedBox(height: 4),
               Text('Ubicación: ${subEvent.location}'),
             ],
@@ -331,7 +339,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.check_circle, color: Colors.green),
+            const Icon(Icons.check_circle, color: AppColors.success),
             const SizedBox(width: 8),
             Text(title),
           ],
@@ -356,7 +364,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.error, color: Colors.red),
+            const Icon(Icons.error, color: AppColors.error),
             const SizedBox(width: 8),
             Text(title),
           ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/app_colors.dart';
 import '../../models/models.dart';
 import '../../services/notification_service.dart';
 
@@ -343,47 +344,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     switch (type) {
       case NotificationType.info:
         icon = Icons.info;
-        color = Colors.blue;
+        color = AppColors.primary;
         break;
       case NotificationType.success:
         icon = Icons.check_circle;
-        color = Colors.green;
+        color = AppColors.success;
         break;
       case NotificationType.warning:
         icon = Icons.warning;
-        color = Colors.orange;
+        color = AppColors.accent;
         break;
       case NotificationType.error:
         icon = Icons.error;
-        color = Colors.red;
+        color = AppColors.error;
         break;
       case NotificationType.event:
         icon = Icons.event;
-        color = const Color(0xFF1E3A8A);
+        color = AppColors.primary;
         break;
       case NotificationType.certificate:
         icon = Icons.card_membership;
-        color = Colors.purple;
+        color = AppColors.success;
         break;
       case NotificationType.registration:
         icon = Icons.person_add;
-        color = Colors.teal;
+        color = AppColors.primary;
         break;
       case NotificationType.user:
         icon = Icons.person;
-        color = Colors.indigo;
+        color = AppColors.primary;
         break;
       case NotificationType.report:
         icon = Icons.assessment;
-        color = Colors.brown;
+        color = AppColors.accent;
         break;
       case NotificationType.attendance:
         icon = Icons.check_circle_outline;
-        color = Colors.green;
+        color = AppColors.success;
         break;
       case NotificationType.reminder:
         icon = Icons.notifications_active;
-        color = Colors.amber;
+        color = AppColors.accent;
         break;
     }
 

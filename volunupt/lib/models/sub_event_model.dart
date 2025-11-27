@@ -8,6 +8,8 @@ class SubEventModel {
   final DateTime startTime;
   final DateTime endTime;
   final String location;
+  final double? latitude;
+  final double? longitude;
   final int maxVolunteers;
   final int registeredCount;
   final String qrCodeData;
@@ -20,6 +22,8 @@ class SubEventModel {
     required this.startTime,
     required this.endTime,
     required this.location,
+    this.latitude,
+    this.longitude,
     required this.maxVolunteers,
     this.registeredCount = 0,
     required this.qrCodeData,
@@ -35,6 +39,12 @@ class SubEventModel {
       startTime: (snapshot['startTime'] as Timestamp).toDate(),
       endTime: (snapshot['endTime'] as Timestamp).toDate(),
       location: snapshot['location'],
+      latitude: (snapshot['latitude'] is num)
+          ? (snapshot['latitude'] as num).toDouble()
+          : null,
+      longitude: (snapshot['longitude'] is num)
+          ? (snapshot['longitude'] as num).toDouble()
+          : null,
       maxVolunteers: snapshot['maxVolunteers'],
       registeredCount: snapshot['registeredCount'] ?? 0,
       qrCodeData: snapshot['qrCodeData'] ?? '',
@@ -49,6 +59,8 @@ class SubEventModel {
       'startTime': Timestamp.fromDate(startTime),
       'endTime': Timestamp.fromDate(endTime),
       'location': location,
+      'latitude': latitude,
+      'longitude': longitude,
       'maxVolunteers': maxVolunteers,
       'registeredCount': registeredCount,
       'qrCodeData': qrCodeData,

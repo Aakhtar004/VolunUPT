@@ -211,12 +211,9 @@ Seleccionar un Evento Base para ver su descripción y su lista de subEvents.
 Inscribirse a un subEvent específico (crea un doc en registrations). La app debe validar cupos (registeredCount < maxVolunteers).
 
 Cancelar una inscripción (ej. hasta 24h antes del subevento).
+Ver sus inscripciones, inscrbirse a una clase.
 
 Participación (Día del Evento):
-
-Acceder a la función de "Escanear QR" desde la app.
-
-Escanear el QR que el coordinador muestra. La app envía el userId y el qrCodeData (que identifica al subEventId) a Firebase.
 
 Se crea un registro en attendanceRecords con status: "checked-in".
 

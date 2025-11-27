@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../services/services.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/app_dialogs.dart';
+import '../../utils/feedback_overlay.dart';
 
 class ValidateAttendanceScreen extends StatefulWidget {
   final UserModel user;
@@ -217,7 +219,7 @@ class _ValidateAttendanceScreenState extends State<ValidateAttendanceScreen> {
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1F2937),
+                          color: AppColors.textPrimary,
                         ),
                       ),
                       Text(
@@ -250,7 +252,7 @@ class _ValidateAttendanceScreenState extends State<ValidateAttendanceScreen> {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1F2937),
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -301,7 +303,7 @@ class _ValidateAttendanceScreenState extends State<ValidateAttendanceScreen> {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFF1F2937),
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
@@ -312,21 +314,21 @@ class _ValidateAttendanceScreenState extends State<ValidateAttendanceScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.blue[50],
+                  color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.blue[200]!),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.note, size: 16, color: Colors.blue[600]),
+                    const Icon(Icons.note, size: 16, color: AppColors.primary),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         attendance.coordinatorNotes ?? '',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.blue[700],
+                          color: AppColors.primary,
                         ),
                       ),
                     ),
@@ -346,8 +348,8 @@ class _ValidateAttendanceScreenState extends State<ValidateAttendanceScreen> {
                       icon: const Icon(Icons.close, size: 18),
                       label: const Text('Rechazar'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
+                        foregroundColor: AppColors.error,
+                        side: const BorderSide(color: AppColors.error),
                       ),
                     ),
                   ),
@@ -358,7 +360,7 @@ class _ValidateAttendanceScreenState extends State<ValidateAttendanceScreen> {
                       icon: const Icon(Icons.check, size: 18),
                       label: const Text('Confirmar'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: AppColors.success,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -393,17 +395,17 @@ class _ValidateAttendanceScreenState extends State<ValidateAttendanceScreen> {
 
     switch (status) {
       case AttendanceStatus.checkedIn:
-        color = Colors.orange;
+        color = AppColors.primary;
         text = 'Pendiente';
         icon = Icons.schedule;
         break;
       case AttendanceStatus.validated:
-        color = Colors.green;
+        color = AppColors.success;
         text = 'Confirmada';
         icon = Icons.check_circle;
         break;
       case AttendanceStatus.absent:
-        color = Colors.red;
+        color = AppColors.error;
         text = 'Rechazada';
         icon = Icons.cancel;
         break;
@@ -508,115 +510,96 @@ void _showConfirmDialog(AttendanceRecordModel attendance) {
   );
   final notesController = TextEditingController(text: attendance.coordinatorNotes ?? '');
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar Asistencia'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Estudiante (ID): ${attendance.userId}'),
-            Text('Actividad (ID): ${attendance.subEventId}'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: hoursController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Horas confirmadas',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notesController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Notas (opcional)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
+  AppDialogs.modal(
+    context,
+    title: 'Confirmar Asistencia',
+    icon: Icons.check_circle,
+    iconColor: AppColors.success,
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Estudiante (ID): ${attendance.userId}'),
+        Text('Actividad (ID): ${attendance.subEventId}'),
+        const SizedBox(height: 16),
+        TextField(
+          controller: hoursController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Horas confirmadas',
+            border: OutlineInputBorder(),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
+        const SizedBox(height: 12),
+        TextField(
+          controller: notesController,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Notas (opcional)',
+            border: OutlineInputBorder(),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await _confirmAttendance(
-                attendance,
-                double.tryParse(hoursController.text) ?? attendance.hoursEarned,
-                notesController.text,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Confirmar'),
-          ),
-        ],
+        ),
+      ],
+    ),
+    actions: [
+      AppDialogs.cancelAction(onPressed: () => Navigator.of(context).pop()),
+      AppDialogs.primaryAction(
+        label: 'Confirmar',
+        onPressed: () async {
+          Navigator.of(context).pop();
+          await _confirmAttendance(
+            attendance,
+            double.tryParse(hoursController.text) ?? attendance.hoursEarned,
+            notesController.text,
+          );
+        },
       ),
-    );
-  }
+    ],
+  );
+}
 
 void _showRejectDialog(AttendanceRecordModel attendance) {
   final notesController = TextEditingController();
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rechazar Asistencia'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Estudiante (ID): ${attendance.userId}'),
-            Text('Actividad (ID): ${attendance.subEventId}'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: notesController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Motivo del rechazo',
-                border: OutlineInputBorder(),
-                hintText: 'Explica por qué se rechaza esta asistencia...',
-              ),
-            ),
-          ],
+  AppDialogs.modal(
+    context,
+    title: 'Rechazar Asistencia',
+    icon: Icons.error_outline,
+    iconColor: AppColors.error,
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Estudiante (ID): ${attendance.userId}'),
+        Text('Actividad (ID): ${attendance.subEventId}'),
+        const SizedBox(height: 16),
+        TextField(
+          controller: notesController,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Motivo del rechazo',
+            border: OutlineInputBorder(),
+            hintText: 'Explica por qué se rechaza esta asistencia...',
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (notesController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Debes proporcionar un motivo para el rechazo'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-              Navigator.of(context).pop();
-              await _rejectAttendance(attendance, notesController.text);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Rechazar'),
-          ),
-        ],
+      ],
+    ),
+    actions: [
+      AppDialogs.cancelAction(onPressed: () => Navigator.of(context).pop()),
+      AppDialogs.dangerAction(
+        label: 'Rechazar',
+        onPressed: () async {
+          if (notesController.text.trim().isEmpty) {
+            FeedbackOverlay.showError(context, 'Debes proporcionar un motivo para el rechazo');
+            return;
+          }
+          Navigator.of(context).pop();
+          await _rejectAttendance(attendance, notesController.text);
+        },
       ),
-    );
-  }
+    ],
+  );
+}
 
   void _showEditDialog(AttendanceRecordModel attendance) {
     final hoursController = TextEditingController(
@@ -624,59 +607,52 @@ void _showRejectDialog(AttendanceRecordModel attendance) {
     );
     final notesController = TextEditingController(text: '');
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Editar Asistencia'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Estudiante (ID): ${attendance.userId}'),
-            Text('Actividad (ID): ${attendance.subEventId}'),
-            Text('Estado actual: ${attendance.status == AttendanceStatus.validated ? 'Validada' : attendance.status == AttendanceStatus.absent ? 'Rechazada' : 'Registrada'}'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: hoursController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Horas confirmadas',
-                border: OutlineInputBorder(),
-              ),
+    AppDialogs.modal(
+      context,
+      title: 'Editar Asistencia',
+      icon: Icons.edit,
+      iconColor: AppColors.primary,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Estudiante (ID): ${attendance.userId}'),
+          Text('Actividad (ID): ${attendance.subEventId}'),
+          Text('Estado actual: ${attendance.status == AttendanceStatus.validated ? 'Validada' : attendance.status == AttendanceStatus.absent ? 'Rechazada' : 'Registrada'}'),
+          const SizedBox(height: 16),
+          TextField(
+            controller: hoursController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Horas confirmadas',
+              border: OutlineInputBorder(),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notesController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Notas',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await _updateAttendance(
-                attendance,
-                double.tryParse(hoursController.text) ?? attendance.hoursEarned,
-                notesController.text,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+          const SizedBox(height: 12),
+          TextField(
+            controller: notesController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Notas',
+              border: OutlineInputBorder(),
             ),
-            child: const Text('Actualizar'),
           ),
         ],
       ),
+      actions: [
+        AppDialogs.cancelAction(onPressed: () => Navigator.of(context).pop()),
+        AppDialogs.primaryAction(
+          label: 'Actualizar',
+          onPressed: () async {
+            Navigator.of(context).pop();
+            await _updateAttendance(
+              attendance,
+              double.tryParse(hoursController.text) ?? attendance.hoursEarned,
+              notesController.text,
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -688,23 +664,12 @@ void _showRejectDialog(AttendanceRecordModel attendance) {
         coordinatorId: widget.user.uid,
         notes: notes,
       );
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Asistencia confirmada exitosamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        await FeedbackOverlay.showSuccess(context, 'Asistencia confirmada exitosamente');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al confirmar asistencia: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        await FeedbackOverlay.showError(context, 'No se pudo confirmar la asistencia');
       }
     }
   }
@@ -716,23 +681,12 @@ void _showRejectDialog(AttendanceRecordModel attendance) {
         coordinatorId: widget.user.uid,
         reason: notes,
       );
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Asistencia rechazada'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        await FeedbackOverlay.showInfo(context, 'Asistencia rechazada');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al rechazar asistencia: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        await FeedbackOverlay.showError(context, 'No se pudo rechazar la asistencia');
       }
     }
   }
@@ -745,23 +699,12 @@ void _showRejectDialog(AttendanceRecordModel attendance) {
         coordinatorId: widget.user.uid,
         notes: notes,
       );
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Asistencia actualizada exitosamente'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
+        await FeedbackOverlay.showSuccess(context, 'Asistencia actualizada exitosamente');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al actualizar asistencia: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        await FeedbackOverlay.showError(context, 'No se pudo actualizar la asistencia');
       }
     }
   }

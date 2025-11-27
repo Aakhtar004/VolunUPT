@@ -103,6 +103,36 @@ class AttendanceService {
     }
   }
 
+  static Future<int> countPendingAttendanceForCoordinator(String coordinatorId) async {
+    final events = await _firestore
+        .collection(_eventsCollection)
+        .where('coordinatorId', isEqualTo: coordinatorId)
+        .get();
+    final eventIds = events.docs.map((d) => d.id).toList();
+    if (eventIds.isEmpty) return 0;
+
+    int total = 0;
+    const chunkSize = 10;
+    for (var i = 0; i < eventIds.length; i += chunkSize) {
+      final chunk = eventIds.sublist(i, i + chunkSize > eventIds.length ? eventIds.length : i + chunkSize);
+      final q = await _firestore
+          .collection(_attendanceRecordsCollection)
+          .where('baseEventId', whereIn: chunk)
+          .where('status', isEqualTo: AttendanceStatus.checkedIn.toString().split('.').last)
+          .get();
+      total += q.docs.length;
+    }
+    return total;
+  }
+
+  static Future<int> countPendingAttendanceAll() async {
+    final q = await _firestore
+        .collection(_attendanceRecordsCollection)
+        .where('status', isEqualTo: AttendanceStatus.checkedIn.toString().split('.').last)
+        .get();
+    return q.docs.length;
+  }
+
   // Verificar si un usuario está inscrito en un subevento
   static Future<bool> _isUserRegisteredForSubEvent(String userId, String subEventId) async {
     try {

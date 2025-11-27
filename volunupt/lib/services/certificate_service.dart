@@ -19,6 +19,11 @@ class CertificateService {
             .toList());
   }
 
+  static Future<int> countAllCertificates() async {
+    final q = await _firestore.collection(_certificatesCollection).get();
+    return q.docs.length;
+  }
+
   // Obtener certificado por ID
   static Future<CertificateModel?> getCertificateById(String certificateId) async {
     try {

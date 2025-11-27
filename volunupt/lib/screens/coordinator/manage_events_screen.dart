@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/feedback_overlay.dart';
+import '../../utils/app_dialogs.dart';
+import '../../utils/skeleton_loader.dart';
 import '../../models/models.dart';
 import '../../services/services.dart';
 import 'coordinator_student_qr_scanner_screen.dart';
+import 'event_registrations_screen.dart';
 import 'attendance_list_screen.dart';
+
+// Método para pasar asistencia
+enum ScanMethod { qr, list }
 
 class ManageEventsScreen extends StatefulWidget {
   final UserModel user;
@@ -16,7 +23,23 @@ class ManageEventsScreen extends StatefulWidget {
 }
 
 class _ManageEventsScreenState extends State<ManageEventsScreen> {
-  String _selectedTab = 'events';
+  static const int _maxEventsPerCoordinator =
+      5; // Límite de programas por coordinador
+
+  @override
+  void initState() {
+    super.initState();
+    // Validar rol al abrir pantalla
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.user.role != UserRole.coordinador) {
+        FeedbackOverlay.showError(
+          context,
+          'No autorizado. Inicia sesión como coordinador.',
+        );
+        Navigator.of(context).pop();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,85 +55,51 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            onPressed: () => _showCreateEventDialog(),
+            onPressed: () => _onAddEventTap(),
             icon: const Icon(Icons.add),
             tooltip: 'Crear Evento',
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildTabBar(),
-          Expanded(
-            child: _selectedTab == 'events'
-                ? _buildEventsTab()
-                : _buildSubEventsTab(),
-          ),
-        ],
-      ),
+      body: _buildEventsTab(),
     );
   }
 
-  Widget _buildTabBar() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildTabButton('events', 'Programas', Icons.event_note),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _buildTabButton('subevents', 'Actividades', Icons.event),
-          ),
-        ],
-      ),
-    );
+  Future<void> _onAddEventTap() async {
+    try {
+      final current = await EventService.getEventsByCoordinator(
+        widget.user.uid,
+      ).first;
+      if (current.length >= _maxEventsPerCoordinator) {
+        if (!mounted) return;
+        FeedbackOverlay.showInfo(
+          context,
+          'Límite de $_maxEventsPerCoordinator programas alcanzado. Elimina o archiva alguno antes de crear otro.',
+        );
+        return;
+      }
+      _showCreateEventDialog();
+    } catch (e) {
+      if (!mounted) return;
+      FeedbackOverlay.showError(context, 'No se pudo verificar el límite de programas');
+      // Aún así permitir crear si falla la verificación
+      _showCreateEventDialog();
+    }
   }
 
-  Widget _buildTabButton(String value, String label, IconData icon) {
-    final isSelected = _selectedTab == value;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedTab = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.grey[300]!,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? Colors.white : AppColors.primary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: isSelected ? Colors.white : AppColors.primary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // Eliminado: pestañas superiores. La UI se simplificó para mostrar solo la lista de programas.
+
+  // Eliminado: botón de pestañas (ya no se usan pestañas en esta pantalla)
 
   Widget _buildEventsTab() {
     return StreamBuilder<List<EventModel>>(
       stream: EventService.getEventsByCoordinator(widget.user.uid),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: 3,
+            itemBuilder: (context, index) => const EventCardSkeleton(),
           );
         }
 
@@ -133,42 +122,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
             itemCount: events.length,
             itemBuilder: (context, index) {
               return _buildEventCard(events[index]);
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildSubEventsTab() {
-    return StreamBuilder<List<SubEventModel>>(
-      stream: EventService.getSubEventsByCoordinator(widget.user.uid),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          );
-        }
-
-        if (snapshot.hasError) {
-          // Mostrar estado vacío contextual cuando ocurra un error
-          return _buildEmptySubEventsState();
-        }
-
-        final subEvents = snapshot.data ?? [];
-
-        if (subEvents.isEmpty) {
-          return _buildEmptySubEventsState();
-        }
-
-        return RefreshIndicator(
-          onRefresh: () async => setState(() {}),
-          color: AppColors.primary,
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: subEvents.length,
-            itemBuilder: (context, index) {
-              return _buildSubEventCard(subEvents[index]);
             },
           ),
         );
@@ -214,16 +167,34 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                           ],
                         ),
                       ),
+                      const PopupMenuItem(
+                        value: 'registrations',
+                        child: Row(
+                          children: [
+                            Icon(Icons.people, size: 18),
+                            SizedBox(width: 8),
+                            Text('Ver inscritos del programa'),
+                          ],
+                        ),
+                      ),
                       PopupMenuItem(
-                        value: event.status == EventStatus.borrador ? 'publish' : 'mark_draft',
+                        value: event.status == EventStatus.borrador
+                            ? 'publish'
+                            : 'mark_draft',
                         child: Row(
                           children: [
                             Icon(
-                              event.status == EventStatus.borrador ? Icons.publish : Icons.unpublished,
+                              event.status == EventStatus.borrador
+                                  ? Icons.publish
+                                  : Icons.unpublished,
                               size: 18,
                             ),
                             const SizedBox(width: 8),
-                            Text(event.status == EventStatus.borrador ? 'Publicar' : 'Marcar como borrador'),
+                            Text(
+                              event.status == EventStatus.borrador
+                                  ? 'Publicar'
+                                  : 'Marcar como borrador',
+                            ),
                           ],
                         ),
                       ),
@@ -261,11 +232,15 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(Icons.delete, size: 18, color: Colors.red),
+                            Icon(
+                              Icons.delete,
+                              size: 18,
+                              color: AppColors.error,
+                            ),
                             SizedBox(width: 8),
                             Text(
                               'Eliminar',
-                              style: TextStyle(color: Colors.red),
+                              style: TextStyle(color: AppColors.error),
                             ),
                           ],
                         ),
@@ -308,167 +283,116 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              Row(children: [_buildStatusChip(event.status), const Spacer()]),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton.icon(
-                  onPressed: () => _showSelectSubEventForScan(event),
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Pasar asistencia'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSubEventCard(SubEventModel subEvent) {
-    final isUpcoming = subEvent.startTime.isAfter(DateTime.now());
-    final isActive =
-        DateTime.now().isAfter(subEvent.startTime) &&
-        DateTime.now().isBefore(subEvent.endTime);
-    final isCompleted = subEvent.endTime.isBefore(DateTime.now());
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => _showSubEventDetails(subEvent),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
               Row(
                 children: [
-                  Expanded(
-                    child: Text(
-                      subEvent.title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  PopupMenuButton<String>(
-                    onSelected: (value) =>
-                        _handleSubEventAction(value, subEvent),
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit, size: 18),
-                            SizedBox(width: 8),
-                            Text('Editar'),
-                          ],
+                  _buildStatusChip(event.status),
+                  const SizedBox(width: 8),
+                  StreamBuilder<List<SubEventModel>>(
+                    stream: EventService.getSubEventsByEvent(event.eventId),
+                    builder: (context, snap) {
+                      final now = DateTime.now();
+                      String text = 'Pendiente';
+                      Color color = AppColors.primary;
+                      if (snap.hasData && snap.data!.isNotEmpty) {
+                        final subs = snap.data!;
+                        final hasCompleted = subs.every(
+                          (s) => s.endTime.isBefore(now),
+                        );
+                        final hasStarted = subs.any(
+                          (s) =>
+                              !s.endTime.isBefore(now) &&
+                              s.startTime.isBefore(now),
+                        );
+                        if (hasCompleted) {
+                          text = 'Finalizado';
+                          color = Colors.grey;
+                        } else if (hasStarted) {
+                          text = 'En curso';
+                          color = AppColors.accent;
+                        }
+                      }
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
                         ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'scan',
-                        child: Row(
-                          children: [
-                            Icon(Icons.qr_code_scanner, size: 18),
-                            SizedBox(width: 8),
-                            Text('Pasar asistencia'),
-                          ],
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'attendance',
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.people, size: 18),
-                            SizedBox(width: 8),
-                            Text('Ver Asistencia'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, size: 18, color: Colors.red),
-                            SizedBox(width: 8),
+                            Icon(Icons.timelapse, size: 12, color: color),
+                            const SizedBox(width: 4),
                             Text(
-                              'Eliminar',
-                              style: TextStyle(color: Colors.red),
+                              text,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: color,
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    _formatDate(subEvent.startTime),
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(width: 16),
-                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${_formatTime(subEvent.startTime)} - ${_formatTime(subEvent.endTime)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                ],
-              ),
-              if (subEvent.location.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        subEvent.location,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _buildSubEventStatusChip(isUpcoming, isActive, isCompleted),
                   const Spacer(),
-                  Text(
-                    '${subEvent.registeredCount}/${subEvent.maxVolunteers}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey[600],
+                  StreamBuilder<List<RegistrationModel>>(
+                    stream: EventService.getAllRegistrationsByEvent(
+                      event.eventId,
                     ),
+                    builder: (context, regSnap) {
+                      final count = regSnap.data?.length ?? 0;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.groups,
+                              size: 12,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$count inscritos',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
+              SizedBox(
+                width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => _handleSubEventAction('scan', subEvent),
+                  onPressed: () => _showScanMethodPicker(event),
                   icon: const Icon(Icons.qr_code_scanner),
                   label: const Text('Pasar asistencia'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(48),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -486,12 +410,12 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
 
     switch (status) {
       case EventStatus.publicado:
-        color = Colors.green;
+        color = AppColors.primary;
         text = 'Publicado';
         icon = Icons.check_circle;
         break;
       case EventStatus.completado:
-        color = Colors.blue;
+        color = AppColors.success;
         text = 'Completado';
         icon = Icons.check_circle;
         break;
@@ -531,52 +455,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
     );
   }
 
-  Widget _buildSubEventStatusChip(
-    bool isUpcoming,
-    bool isActive,
-    bool isCompleted,
-  ) {
-    Color color;
-    String text;
-    IconData icon;
-
-    if (isCompleted) {
-      color = Colors.green;
-      text = 'Completada';
-      icon = Icons.check_circle;
-    } else if (isActive) {
-      color = Colors.orange;
-      text = 'En curso';
-      icon = Icons.play_circle;
-    } else {
-      color = Colors.blue;
-      text = 'Próxima';
-      icon = Icons.schedule;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Eliminado: chip de estado de sub-actividad (pantalla sin gestión directa de sub-actividades)
 
   Widget _buildEmptyEventsState() {
     return Center(
@@ -614,31 +493,7 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
     );
   }
 
-  Widget _buildEmptySubEventsState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.event, size: 64, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(
-            'No tienes actividades creadas',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Las actividades aparecerán aquí una vez que las crees',
-            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+  // Eliminado: estado vacío de sub-actividades (no hay pestaña de actividades en esta pantalla)
 
   void _showCreateEventDialog() {
     final formKey = GlobalKey<FormState>();
@@ -654,10 +509,15 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
     TimeOfDay? singleEnd;
     bool isSingleSession = true; // por defecto
 
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
+    bool isSubmitting = false;
+    StateSetter? setStateDialogRef;
+    AppDialogs.modal(
+      context,
+      title: 'Crear Programa',
+      icon: Icons.event,
+      content: StatefulBuilder(
         builder: (context, setStateDialog) {
+          setStateDialogRef = setStateDialog;
           void pickDate() async {
             final now = DateTime.now();
             final picked = await showDatePicker(
@@ -697,262 +557,1003 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
             return DateFormat('HH:mm').format(dt);
           }
 
-          return AlertDialog(
-            title: const Text('Crear Programa'),
-            content: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Título',
-                        hintText: 'Nombre del programa',
-                      ),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Ingresa un título'
-                          : null,
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: descriptionController,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Descripción',
-                        hintText: 'Describe el programa',
+          return Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Información básica
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Información básica',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade800,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: hoursController,
-                      decoration: const InputDecoration(
-                        labelText: 'Horas para certificado',
-                        hintText: 'Ej. 20',
-                      ),
-                      keyboardType: TextInputType.number,
-                      validator: (v) {
-                        final value = double.tryParse(v ?? '');
-                        if (value == null || value <= 0) {
-                          return 'Ingresa horas válidas (>0)';
-                        }
-                        return null;
-                      },
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Título',
+                      hintText: 'Nombre del programa',
+                      prefixIcon: Icon(Icons.event),
                     ),
-                    const SizedBox(height: 12),
-                    // Selector de tipo de sesiones
-                    Row(
-                      children: [
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            title: const Text('Una sesión'),
-                            value: true,
-                            groupValue: isSingleSession,
-                            onChanged: (v) => setStateDialog(() => isSingleSession = v ?? true),
-                          ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            title: const Text('Varias sesiones'),
-                            value: false,
-                            groupValue: isSingleSession,
-                            onChanged: (v) => setStateDialog(() => isSingleSession = v ?? false),
-                          ),
-                        ),
-                      ],
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Ingresa un título'
+                        : null,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: descriptionController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Descripción',
+                      hintText: 'Describe el programa',
+                      prefixIcon: Icon(Icons.description),
                     ),
-                    const SizedBox(height: 8),
-                    if (isSingleSession) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: pickDate,
-                              icon: const Icon(Icons.calendar_today),
-                              label: Text(singleDate == null
-                                  ? 'Seleccionar fecha'
-                                  : DateFormat('dd/MM/yyyy').format(singleDate!)),
-                            ),
-                          ),
-                        ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: hoursController,
+                    decoration: const InputDecoration(
+                      labelText: 'Horas para certificado',
+                      hintText: 'Ej. 20',
+                      prefixIcon: Icon(Icons.schedule),
+                      helperText:
+                          'Horas totales del programa que contarán para el certificado',
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      final value = double.tryParse(v ?? '');
+                      if (value == null || value <= 0) {
+                        return 'Ingresa horas válidas (>0)';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Tipo de sesiones
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Tipo de sesiones',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade800,
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: pickStartTime,
-                              icon: const Icon(Icons.access_time),
-                              label: Text('Inicio: ${formatTime(singleStart)}'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: pickEndTime,
-                              icon: const Icon(Icons.access_time),
-                              label: Text('Fin: ${formatTime(singleEnd)}'),
-                            ),
-                          ),
-                        ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Una sesión'),
+                        selected: isSingleSession,
+                        onSelected: (_) =>
+                            setStateDialog(() => isSingleSession = true),
                       ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: locationController,
-                        decoration: const InputDecoration(
-                          labelText: 'Ubicación',
-                        ),
-                        validator: (v) {
-                          if (!isSingleSession) return null;
-                          return (v == null || v.trim().isEmpty)
-                              ? 'Ingresa la ubicación'
-                              : null;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: maxVolController,
-                        decoration: const InputDecoration(
-                          labelText: 'Cupo máximo',
-                        ),
-                        keyboardType: TextInputType.number,
-                        validator: (v) {
-                          if (!isSingleSession) return null;
-                          final value = int.tryParse(v ?? '');
-                          if (value == null || value <= 0) {
-                            return 'Ingresa un número válido (>0)';
-                          }
-                          return null;
-                        },
+                      ChoiceChip(
+                        label: const Text('Varias sesiones'),
+                        selected: !isSingleSession,
+                        onSelected: (_) =>
+                            setStateDialog(() => isSingleSession = false),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (isSingleSession) ...[
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: pickDate,
+                                    icon: const Icon(Icons.calendar_today),
+                                    label: Text(
+                                      singleDate == null
+                                          ? 'Seleccionar fecha'
+                                          : DateFormat(
+                                              'dd/MM/yyyy',
+                                            ).format(singleDate!),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: pickStartTime,
+                                    icon: const Icon(Icons.access_time),
+                                    label: Text(
+                                      'Inicio: ${formatTime(singleStart)}',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: pickEndTime,
+                                    icon: const Icon(Icons.access_time),
+                                    label: Text(
+                                      'Fin: ${formatTime(singleEnd)}',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: locationController,
+                              decoration: const InputDecoration(
+                                labelText: 'Ubicación',
+                                hintText: 'Lugar físico o sala virtual',
+                                prefixIcon: Icon(Icons.place),
+                              ),
+                              validator: (v) {
+                                if (!isSingleSession) return null;
+                                return (v == null || v.trim().isEmpty)
+                                    ? 'Ingresa la ubicación'
+                                    : null;
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: maxVolController,
+                              decoration: const InputDecoration(
+                                labelText: 'Cupo máximo (opcional)',
+                                hintText: 'Dejar vacío para sin límite',
+                                prefixIcon: Icon(Icons.people_alt),
+                                helperText: 'Si no especificas, no habrá límite de inscritos',
+                              ),
+                              keyboardType: TextInputType.number,
+                              validator: (v) {
+                                if (!isSingleSession) return null;
+                                if (v == null || v.trim().isEmpty) return null; // Opcional
+                                final value = int.tryParse(v);
+                                if (value == null || value <= 0) {
+                                  return 'Ingresa un número válido mayor a 0';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  if (!formKey.currentState!.validate()) return;
-                  // Pre-capturar Navigator y ScaffoldMessenger para evitar usar BuildContext tras await
-                  final navigator = Navigator.of(context);
-                  final messenger = ScaffoldMessenger.of(context);
-
-                  try {
-                    String? location;
-                    int? maxVol;
-                    DateTime? date;
-                    DateTime? startDateTime;
-                    DateTime? endDateTime;
-
-                    if (isSingleSession) {
-                      if (singleDate == null || singleStart == null || singleEnd == null) {
-                        messenger.showSnackBar(const SnackBar(content: Text('Completa fecha y horas')));
-                        return;
-                      }
-                      date = singleDate!;
-                      startDateTime = DateTime(date.year, date.month, date.day, singleStart!.hour, singleStart!.minute);
-                      endDateTime = DateTime(date.year, date.month, date.day, singleEnd!.hour, singleEnd!.minute);
-                      location = locationController.text.trim();
-                      maxVol = int.tryParse(maxVolController.text.trim());
-                    }
-
-                    final id = await EventService.createEvent(
-                      title: titleController.text.trim(),
-                      description: descriptionController.text.trim(),
-                      coordinatorId: widget.user.uid,
-                      totalHoursForCertificate: double.parse(hoursController.text.trim()),
-                      sessionType: isSingleSession ? SessionType.unica : SessionType.multiple,
-                      singleSessionDate: date,
-                      singleSessionStartTime: startDateTime,
-                      singleSessionEndTime: endDateTime,
-                      singleSessionLocation: location,
-                      singleSessionMaxVolunteers: maxVol,
-                    );
-                    navigator.pop();
-                    messenger.showSnackBar(
-                      SnackBar(content: Text('Programa creado: $id')),
-                    );
-                    if (!mounted) return;
-                    setState(() {});
-                  } catch (e) {
-                    messenger.showSnackBar(
-                      SnackBar(content: Text('Error al crear programa: $e')),
-                    );
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Crear'),
-              ),
-            ],
           );
+          // Eliminado punto y coma sobrante que cerraba indebidamente antes del builder
         },
       ),
+      actions: [
+        AppDialogs.cancelAction(
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        StatefulBuilder(
+          builder: (context, setBtn) {
+            setStateDialogRef = setStateDialogRef ?? setBtn;
+            return ElevatedButton(
+              onPressed: isSubmitting ? null : () async {
+                if (!formKey.currentState!.validate()) return;
+
+            final ctx = context;
+            final navigator = Navigator.of(ctx);
+
+            try {
+              setStateDialogRef?.call(() => isSubmitting = true);
+              String? location;
+              int? maxVol;
+              DateTime? date;
+              DateTime? startDateTime;
+              DateTime? endDateTime;
+
+              if (isSingleSession) {
+                if (singleDate == null ||
+                    singleStart == null ||
+                    singleEnd == null) {
+                  FeedbackOverlay.showInfo(ctx, 'Completa fecha y horas');
+                  return;
+                }
+                date = singleDate!;
+                startDateTime = DateTime(
+                  date.year,
+                  date.month,
+                  date.day,
+                  singleStart!.hour,
+                  singleStart!.minute,
+                );
+                endDateTime = DateTime(
+                  date.year,
+                  date.month,
+                  date.day,
+                  singleEnd!.hour,
+                  singleEnd!.minute,
+                );
+                location = locationController.text.trim();
+                // Si no se especifica cupo, usar un número grande (sin límite efectivo)
+                final maxVolText = maxVolController.text.trim();
+                maxVol = maxVolText.isEmpty ? 9999 : int.tryParse(maxVolText);
+              }
+
+              final programTitle = titleController.text.trim();
+              await EventService.createEvent(
+                title: programTitle,
+                description: descriptionController.text.trim(),
+                coordinatorId: widget.user.uid,
+                totalHoursForCertificate: double.parse(
+                  hoursController.text.trim(),
+                ),
+                sessionType: isSingleSession
+                    ? SessionType.unica
+                    : SessionType.multiple,
+                singleSessionDate: date,
+                singleSessionStartTime: startDateTime,
+                singleSessionEndTime: endDateTime,
+                singleSessionLocation: location,
+                singleSessionMaxVolunteers: maxVol,
+              );
+              if (!ctx.mounted) return;
+              navigator.pop();
+              FeedbackOverlay.showSuccess(ctx, 'Programa "$programTitle" creado exitosamente');
+              setState(() {});
+            } catch (e) {
+              if (!ctx.mounted) return;
+              FeedbackOverlay.showError(ctx, 'No se pudo crear el programa. Verifica los datos e intenta nuevamente');
+            } finally {
+              setStateDialogRef?.call(() => isSubmitting = false);
+            }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Crear'),
+            );
+          },
+        ),
+      ],
     );
   }
 
   void _showEventDetails(EventModel event) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Detalles de: ${event.title}'),
-        backgroundColor: AppColors.primary,
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.8,
+          maxChildSize: 0.95,
+          minChildSize: 0.5,
+          builder: (context, controller) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: controller,
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Encabezado con título y estado
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      event.title,
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _buildStatusChip(event.status),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                icon: const Icon(Icons.close),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.grey[100],
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Descripción
+                          if (event.description.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[50],
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey[200]!),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(Icons.description, 
+                                    size: 20, 
+                                    color: Colors.grey[600]
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      event.description,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey[700],
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          
+                          // Estadísticas en cards
+                          StreamBuilder<List<RegistrationModel>>(
+                            stream: EventService.getAllRegistrationsByEvent(event.eventId),
+                            builder: (context, regSnapshot) {
+                              final inscritos = regSnapshot.data?.length ?? 0;
+                              
+                              return FutureBuilder<int>(
+                                future: _getSubEventCount(event.eventId),
+                                builder: (context, actSnapshot) {
+                                  final actividades = actSnapshot.data ?? 0;
+                                  
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildStatCard(
+                                          icon: Icons.schedule,
+                                          value: '${event.totalHoursForCertificate.toInt()}h',
+                                          label: 'Para certificado',
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _buildStatCard(
+                                          icon: Icons.event,
+                                          value: '$actividades',
+                                          label: 'Actividades',
+                                          color: AppColors.accent,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _buildStatCard(
+                                          icon: Icons.people,
+                                          value: '$inscritos',
+                                          label: 'Inscritos',
+                                          color: AppColors.success,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                          
+                          const SizedBox(height: 24),
+                          
+                          // Título de actividades
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.event_note,
+                                size: 22,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Actividades del Programa',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 12),
+                          
+                          // Lista de actividades
+                          StreamBuilder<List<SubEventModel>>(
+                            stream: EventService.getSubEventsByEvent(event.eventId),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(32.0),
+                                    child: CircularProgressIndicator(
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                );
+                              }
+                              
+                              final subEvents = snapshot.data ?? [];
+                              
+                              if (subEvents.isEmpty) {
+                                return Container(
+                                  padding: const EdgeInsets.all(32),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[50],
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: Colors.grey[200]!,
+                                      style: BorderStyle.solid,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Icon(
+                                        Icons.event_busy,
+                                        size: 56,
+                                        color: Colors.grey[400],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'No hay actividades creadas',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[700],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'Crea tu primera actividad para este programa',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey[600],
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      ElevatedButton.icon(
+                                        onPressed: () {
+                                          Navigator.of(context).pop();
+                                          _showCreateSubEventDialog(event.eventId);
+                                        },
+                                        icon: const Icon(Icons.add_circle),
+                                        label: const Text('Crear actividad'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 24,
+                                            vertical: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              
+                              return Column(
+                                children: subEvents.map((s) {
+                                  final now = DateTime.now();
+                                  final isPast = s.endTime.isBefore(now);
+                                  final isToday = s.date.day == now.day &&
+                                      s.date.month == now.month &&
+                                      s.date.year == now.year;
+                                  
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    decoration: BoxDecoration(
+                                      color: isPast 
+                                          ? Colors.grey[50]
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isToday
+                                            ? AppColors.accent
+                                            : Colors.grey[300]!,
+                                        width: isToday ? 2 : 1,
+                                      ),
+                                      boxShadow: [
+                                        if (!isPast)
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.04),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                      ],
+                                    ),
+                                    child: ListTile(
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      leading: Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: isPast
+                                              ? Colors.grey[200]
+                                              : AppColors.primary.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Icon(
+                                          isPast ? Icons.check_circle : Icons.event,
+                                          color: isPast
+                                              ? Colors.grey[500]
+                                              : AppColors.primary,
+                                          size: 24,
+                                        ),
+                                      ),
+                                      title: Text(
+                                        s.title,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: isPast
+                                              ? Colors.grey[600]
+                                              : AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.calendar_today,
+                                                size: 12,
+                                                color: Colors.grey[600],
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                _formatDate(s.date),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Icon(
+                                                Icons.access_time,
+                                                size: 12,
+                                                color: Colors.grey[600],
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '${_formatTime(s.startTime)} - ${_formatTime(s.endTime)}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.location_on,
+                                                size: 12,
+                                                color: Colors.grey[600],
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Expanded(
+                                                child: Text(
+                                                  s.location,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      trailing: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isPast
+                                              ? Colors.grey[200]
+                                              : _getCapacityColor(
+                                                  s.registeredCount,
+                                                  s.maxVolunteers,
+                                                ).withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          '${s.registeredCount}/${s.maxVolunteers}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: isPast
+                                                ? Colors.grey[600]
+                                                : _getCapacityColor(
+                                                    s.registeredCount,
+                                                    s.maxVolunteers,
+                                                  ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          ),
+                          
+                          const SizedBox(height: 24),
+                          
+                          // Acciones principales
+                          const Text(
+                            'Acciones',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 12),
+                          
+                          // Botones de acción en grid
+                          _buildActionButton(
+                            icon: Icons.qr_code_scanner,
+                            label: 'Pasar Asistencia',
+                            color: AppColors.primary,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _showScanMethodPicker(event);
+                            },
+                          ),
+                          
+                          const SizedBox(height: 8),
+                          
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildActionButton(
+                                  icon: Icons.people,
+                                  label: 'Ver Inscritos',
+                                  color: AppColors.success,
+                                  onTap: () {
+                                    Navigator.of(context).pop();
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => EventRegistrationsScreen(
+                                          eventId: event.eventId,
+                                          eventTitle: event.title,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildActionButton(
+                                  icon: Icons.add_circle,
+                                  label: 'Nueva Actividad',
+                                  color: AppColors.accent,
+                                  onTap: () {
+                                    Navigator.of(context).pop();
+                                    _showCreateSubEventDialog(event.eventId);
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 12),
+                          
+                          // Botones secundarios
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                    _showEditEventDialog(event);
+                                  },
+                                  icon: const Icon(Icons.edit, size: 18),
+                                  label: const Text('Editar'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.primary,
+                                    side: const BorderSide(color: AppColors.primary),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () async {
+                                    final ctx = context;
+                                    try {
+                                      await EventService.updateEventStatus(
+                                        event.eventId,
+                                        event.status == EventStatus.borrador
+                                            ? EventStatus.publicado
+                                            : EventStatus.borrador,
+                                      );
+                                      if (!ctx.mounted) return;
+                                      Navigator.of(ctx).pop();
+                                      FeedbackOverlay.showSuccess(
+                                        ctx,
+                                        event.status == EventStatus.borrador
+                                            ? 'Programa publicado'
+                                            : 'Programa marcado como borrador',
+                                      );
+                                    } catch (e) {
+                                      if (!ctx.mounted) return;
+                              FeedbackOverlay.showError(
+                                ctx,
+                                'No se pudo actualizar el estado',
+                              );
+                                    }
+                                  },
+                                  icon: Icon(
+                                    event.status == EventStatus.borrador
+                                        ? Icons.publish
+                                        : Icons.unpublished,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    event.status == EventStatus.borrador
+                                        ? 'Publicar'
+                                        : 'Despublicar',
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.primary,
+                                    side: const BorderSide(color: AppColors.primary),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 8),
+                          
+                          // Botón eliminar
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _showDeleteEventDialog(event);
+                              },
+                              icon: const Icon(Icons.delete, size: 18),
+                              label: const Text('Eliminar Programa'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.error,
+                                side: const BorderSide(color: AppColors.error),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+  
+  Widget _buildStatCard({
+    required IconData icon,
+    required String value,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[700],
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
-
-  void _showSubEventDetails(SubEventModel subEvent) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Detalles de: ${subEvent.title}'),
-        backgroundColor: AppColors.primary,
+  
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: color,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 22),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
+  
+  Color _getCapacityColor(int registered, int max) {
+    final percentage = registered / max;
+    if (percentage >= 0.9) return AppColors.error;
+    if (percentage >= 0.7) return AppColors.accent;
+    return AppColors.success;
+  }
 
-  void _handleEventAction(String action, EventModel event) {
+  // Eliminado: detalles de sub-actividad (no se usan en esta pantalla)
+
+  void _handleEventAction(String action, EventModel event) async {
     switch (action) {
       case 'edit':
         _showEditEventDialog(event);
         break;
+      case 'registrations':
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => EventRegistrationsScreen(
+              eventId: event.eventId,
+              eventTitle: event.title,
+            ),
+          ),
+        );
+        break;
       case 'add_subevent':
         _showCreateSubEventDialog(event.eventId);
         break;
-      case 'publish': {
-        // Evitar usar BuildContext tras gaps asíncronos
-        final messenger = ScaffoldMessenger.of(context);
-        EventService.updateEventStatus(event.eventId, EventStatus.publicado).then((_) {
-          messenger.showSnackBar(const SnackBar(content: Text('Programa publicado')));
-        }).catchError((e) {
-          messenger.showSnackBar(SnackBar(content: Text('Error al publicar: $e')));
-        });
+      case 'publish':
+        final ctx = context;
+        try {
+          await EventService.updateEventStatus(
+            event.eventId,
+            EventStatus.publicado,
+          );
+          if (!ctx.mounted) return;
+          FeedbackOverlay.showSuccess(ctx, 'Programa publicado');
+        } catch (e) {
+          if (!ctx.mounted) return;
+          FeedbackOverlay.showError(ctx, 'No se pudo publicar el programa');
+        }
         break;
-      }
       case 'mark_draft':
-      {
-        // Evitar usar BuildContext tras gaps asíncronos
-        final messenger = ScaffoldMessenger.of(context);
-        EventService.updateEventStatus(event.eventId, EventStatus.borrador).then((_) {
-          messenger.showSnackBar(const SnackBar(content: Text('Programa marcado como borrador')));
-        }).catchError((e) {
-          messenger.showSnackBar(SnackBar(content: Text('Error al actualizar estado: $e')));
-        });
+        final ctx = context;
+        try {
+          await EventService.updateEventStatus(
+            event.eventId,
+            EventStatus.borrador,
+          );
+          if (!ctx.mounted) return;
+          FeedbackOverlay.showInfo(ctx, 'Programa marcado como borrador');
+        } catch (e) {
+          if (!ctx.mounted) return;
+          FeedbackOverlay.showError(ctx, 'No se pudo actualizar el estado del programa');
+        }
         break;
-      }
       case 'scan':
-        _showSelectSubEventForScan(event);
+        _showScanMethodPicker(event);
         break;
       case 'stats':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Estadísticas próximamente')),
-        );
+        FeedbackOverlay.showInfo(context, 'Estadísticas próximamente');
         break;
       case 'delete':
         _showDeleteEventDialog(event);
@@ -960,80 +1561,35 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
     }
   }
 
-  void _handleSubEventAction(String action, SubEventModel subEvent) {
-    switch (action) {
-      case 'edit':
-        _showEditSubEventDialog(subEvent);
-        break;
-      case 'scan':
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => CoordinatorStudentQRScannerScreen(
-              eventId: subEvent.baseEventId,
-              subEventId: subEvent.subEventId,
-              eventTitle: 'Programa',
-              subEventTitle: subEvent.title,
-            ),
-          ),
-        );
-        break;
-      case 'attendance':
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => AttendanceListScreen(
-              coordinatorId: widget.user.uid,
-              eventId: subEvent.baseEventId,
-              subEventId: subEvent.subEventId,
-              eventTitle: 'Programa',
-              subEventTitle: subEvent.title,
-            ),
-          ),
-        );
-        break;
-      case 'delete':
-        _showDeleteSubEventDialog(subEvent);
-        break;
-    }
-  }
+  // Eliminado: manejador de acciones de sub-actividad (ya no se activan desde esta pantalla)
 
   void _showDeleteEventDialog(EventModel event) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar Programa'),
-        content: Text(
-          '¿Estás seguro de que quieres eliminar "${event.title}"? Esta acción no se puede deshacer.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              // Pre-capturar el ScaffoldMessenger para evitar usar BuildContext tras la operación async
-              final messenger = ScaffoldMessenger.of(context);
-              Navigator.of(context).pop();
-              EventService.deleteEvent(event.eventId).then((_) {
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Programa eliminado')),
-                );
-                if (!mounted) return;
-                setState(() {});
-              }).catchError((e) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Error al eliminar: $e')),
-                );
-              });
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Eliminar'),
-          ),
-        ],
+    AppDialogs.modal(
+      context,
+      title: 'Eliminar Programa',
+      icon: Icons.delete_outline,
+      iconColor: AppColors.error,
+      content: Text(
+        '¿Estás seguro de que quieres eliminar "${event.title}"? Esta acción no se puede deshacer.',
       ),
+      actions: [
+        AppDialogs.cancelAction(onPressed: () => Navigator.of(context).pop()),
+        AppDialogs.dangerAction(
+          label: 'Eliminar',
+          onPressed: () async {
+            Navigator.of(context).pop();
+            try {
+              await EventService.deleteEvent(event.eventId);
+              if (!mounted) return;
+              FeedbackOverlay.showSuccess(context, 'Programa eliminado');
+              setState(() {});
+            } catch (e) {
+              if (!mounted) return;
+              FeedbackOverlay.showError(context, 'No se pudo eliminar el programa');
+            }
+          },
+        ),
+      ],
     );
   }
 
@@ -1041,437 +1597,394 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
     final formKey = GlobalKey<FormState>();
     final titleController = TextEditingController();
     final locationController = TextEditingController();
-    final maxVolController = TextEditingController(text: '30');
+    final maxVolController = TextEditingController(); // Vacío por defecto (sin límite)
     DateTime? date;
     TimeOfDay? start;
     TimeOfDay? end;
+    bool isSubmitting = false;
+    StateSetter? setStateDialogRef;
+    AppDialogs.modal(
+      context,
+      title: 'Crear Actividad',
+      icon: Icons.event,
+      content: StatefulBuilder(
+        builder: (context, setStateDialog) {
+          setStateDialogRef = setStateDialog;
+          void pickDate() async {
+            final now = DateTime.now();
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: now,
+              firstDate: now.subtract(const Duration(days: 0)),
+              lastDate: now.add(const Duration(days: 365 * 2)),
+            );
+            if (picked != null) {
+              setStateDialog(() => date = picked);
+            }
+          }
 
-    void pickDate() async {
-      final now = DateTime.now();
-      final picked = await showDatePicker(
-        context: context,
-        initialDate: now,
-        firstDate: now.subtract(const Duration(days: 0)),
-        lastDate: now.add(const Duration(days: 365 * 2)),
-      );
-      if (picked != null) {
-        setState(() => date = picked);
-      }
-    }
+          void pickStartTime() async {
+            final picked = await showTimePicker(
+              context: context,
+              initialTime: const TimeOfDay(hour: 9, minute: 0),
+            );
+            if (picked != null) {
+              setStateDialog(() => start = picked);
+            }
+          }
 
-    void pickStartTime() async {
-      final picked = await showTimePicker(
-        context: context,
-        initialTime: const TimeOfDay(hour: 9, minute: 0),
-      );
-      if (picked != null) {
-        setState(() => start = picked);
-      }
-    }
+          void pickEndTime() async {
+            final picked = await showTimePicker(
+              context: context,
+              initialTime: const TimeOfDay(hour: 12, minute: 0),
+            );
+            if (picked != null) {
+              setStateDialog(() => end = picked);
+            }
+          }
 
-    void pickEndTime() async {
-      final picked = await showTimePicker(
-        context: context,
-        initialTime: const TimeOfDay(hour: 12, minute: 0),
-      );
-      if (picked != null) {
-        setState(() => end = picked);
-      }
-    }
+          String formatTime(TimeOfDay? t) {
+            if (t == null) return 'Seleccionar';
+            final dt = DateTime(0, 1, 1, t.hour, t.minute);
+            return DateFormat('HH:mm').format(dt);
+          }
 
-    String formatTime(TimeOfDay? t) {
-      if (t == null) return 'Seleccionar';
-      final dt = DateTime(0, 1, 1, t.hour, t.minute);
-      return DateFormat('HH:mm').format(dt);
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Crear Actividad'),
-        content: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Título',
+          return Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: titleController,
+                    decoration: const InputDecoration(labelText: 'Título'),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Ingresa un título'
+                        : null,
                   ),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Ingresa un título'
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: pickDate,
-                        icon: const Icon(Icons.calendar_today),
-                        label: Text(date == null
-                            ? 'Seleccionar fecha'
-                            : DateFormat('dd/MM/yyyy').format(date!)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: pickDate,
+                          icon: const Icon(Icons.calendar_today),
+                          label: Text(
+                            date == null
+                                ? 'Seleccionar fecha'
+                                : DateFormat('dd/MM/yyyy').format(date!),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: pickStartTime,
-                        icon: const Icon(Icons.access_time),
-                        label: Text('Inicio: ${formatTime(start)}'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: pickEndTime,
-                        icon: const Icon(Icons.access_time),
-                        label: Text('Fin: ${formatTime(end)}'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: locationController,
-                  decoration: const InputDecoration(
-                    labelText: 'Ubicación',
+                    ],
                   ),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Ingresa la ubicación'
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: maxVolController,
-                  decoration: const InputDecoration(
-                    labelText: 'Cupo máximo',
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: pickStartTime,
+                          icon: const Icon(Icons.access_time),
+                          label: Text('Inicio: ${formatTime(start)}'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: pickEndTime,
+                          icon: const Icon(Icons.access_time),
+                          label: Text('Fin: ${formatTime(end)}'),
+                        ),
+                      ),
+                    ],
                   ),
-                  keyboardType: TextInputType.number,
-                  validator: (v) {
-                    final value = int.tryParse(v ?? '');
-                    if (value == null || value <= 0) {
-                      return 'Ingresa un número válido (>0)';
-                    }
-                    return null;
-                  },
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: locationController,
+                    decoration: const InputDecoration(labelText: 'Ubicación'),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Ingresa la ubicación'
+                        : null,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: maxVolController,
+                    decoration: const InputDecoration(
+                      labelText: 'Cupo máximo (opcional)',
+                      hintText: 'Dejar vacío para sin límite',
+                      helperText: 'Si no especificas, no habrá límite de inscritos',
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return null; // Opcional
+                      final value = int.tryParse(v);
+                      if (value == null || value <= 0) {
+                        return 'Ingresa un número válido mayor a 0';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              // Pre-capturar Navigator y ScaffoldMessenger para evitar usar BuildContext tras await
-              final navigator = Navigator.of(context);
-              final messenger = ScaffoldMessenger.of(context);
-              if (!formKey.currentState!.validate() || date == null || start == null || end == null) {
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Completa fecha y horas')),
-                );
-                return;
-              }
-              final startDateTime = DateTime(date!.year, date!.month, date!.day, start!.hour, start!.minute);
-              final endDateTime = DateTime(date!.year, date!.month, date!.day, end!.hour, end!.minute);
-              try {
-                final id = await EventService.createSubEvent(
-                  baseEventId: eventId,
-                  title: titleController.text.trim(),
-                  date: date!,
-                  startTime: startDateTime,
-                  endTime: endDateTime,
-                  location: locationController.text.trim(),
-                  maxVolunteers: int.parse(maxVolController.text.trim()),
-                );
-                navigator.pop();
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Actividad creada: $id')),
-                );
-                if (!mounted) return;
-                setState(() {});
-              } catch (e) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Error al crear actividad: $e')),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Crear'),
-          ),
-        ],
+          );
+        },
       ),
+      actions: [
+        AppDialogs.cancelAction(
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        StatefulBuilder(
+          builder: (context, setBtn) {
+            setStateDialogRef = setStateDialogRef ?? setBtn;
+            return ElevatedButton(
+              onPressed: isSubmitting ? null : () async {
+                final ctx = context;
+                final navigator = Navigator.of(ctx);
+                if (!formKey.currentState!.validate() ||
+                    date == null ||
+                    start == null ||
+                    end == null) {
+                  FeedbackOverlay.showInfo(ctx, 'Completa fecha y horas');
+                  return;
+                }
+                final startDateTime = DateTime(
+                  date!.year,
+                  date!.month,
+                  date!.day,
+                  start!.hour,
+                  start!.minute,
+                );
+                final endDateTime = DateTime(
+                  date!.year,
+                  date!.month,
+                  date!.day,
+                  end!.hour,
+                  end!.minute,
+                );
+                try {
+                  setStateDialogRef?.call(() => isSubmitting = true);
+                  final activityTitle = titleController.text.trim();
+                  // Si no se especifica cupo, usar un número grande (sin límite efectivo)
+                  final maxVolText = maxVolController.text.trim();
+                  final maxVolunteers = maxVolText.isEmpty ? 9999 : int.parse(maxVolText);
+                  
+                  await EventService.createSubEvent(
+                    baseEventId: eventId,
+                    title: activityTitle,
+                    date: date!,
+                    startTime: startDateTime,
+                    endTime: endDateTime,
+                    location: locationController.text.trim(),
+                    maxVolunteers: maxVolunteers,
+                  );
+                  if (!ctx.mounted) return;
+                  navigator.pop();
+                  FeedbackOverlay.showSuccess(ctx, 'Actividad "$activityTitle" creada exitosamente');
+                  setState(() {});
+                } catch (e) {
+                  if (!ctx.mounted) return;
+                  FeedbackOverlay.showError(ctx, 'No se pudo crear la actividad. Verifica los datos');
+                } finally {
+                  setStateDialogRef?.call(() => isSubmitting = false);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Crear'),
+            );
+          },
+        ),
+      ],
     );
   }
 
   void _showEditEventDialog(EventModel event) {
     final formKey = GlobalKey<FormState>();
     final titleController = TextEditingController(text: event.title);
-    final descriptionController = TextEditingController(text: event.description);
-    final hoursController = TextEditingController(text: event.totalHoursForCertificate.toStringAsFixed(0));
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Editar Programa'),
-        content: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Título'),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Ingresa un título'
-                      : null,
+    final descriptionController = TextEditingController(
+      text: event.description,
+    );
+    final hoursController = TextEditingController(
+      text: event.totalHoursForCertificate.toStringAsFixed(0),
+    );
+    bool isSubmitting = false;
+    StateSetter? setStateDialogRef;
+    
+    AppDialogs.modal(
+      context,
+      title: 'Editar Programa',
+      icon: Icons.edit,
+      content: Form(
+        key: formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: titleController,
+                decoration: const InputDecoration(labelText: 'Título'),
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Ingresa un título'
+                    : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: descriptionController,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Descripción'),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: hoursController,
+                decoration: const InputDecoration(
+                  labelText: 'Horas para certificado',
                 ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: descriptionController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Descripción'),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: hoursController,
-                  decoration: const InputDecoration(labelText: 'Horas para certificado'),
-                  keyboardType: TextInputType.number,
-                  validator: (v) {
-                    final value = double.tryParse(v ?? '');
-                    if (value == null || value <= 0) {
-                      return 'Ingresa horas válidas (>0)';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  final value = double.tryParse(v ?? '');
+                  if (value == null || value <= 0) {
+                    return 'Ingresa horas válidas (>0)';
+                  }
+                  return null;
+                },
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              // Pre-capturar Navigator y ScaffoldMessenger para evitar usar BuildContext tras await
-              final navigator = Navigator.of(context);
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                await EventService.updateEvent(
-                  eventId: event.eventId,
-                  title: titleController.text.trim(),
-                  description: descriptionController.text.trim(),
-                  totalHoursForCertificate: double.parse(hoursController.text.trim()),
-                );
-                navigator.pop();
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Programa actualizado')),
-                );
-                if (!mounted) return;
-                setState(() {});
-              } catch (e) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Error al actualizar: $e')),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Guardar'),
-          ),
-        ],
       ),
+      actions: [
+        AppDialogs.cancelAction(
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        StatefulBuilder(
+          builder: (context, setBtn) {
+            setStateDialogRef = setBtn;
+            return ElevatedButton(
+              onPressed: isSubmitting ? null : () async {
+                if (!formKey.currentState!.validate()) return;
+                final ctx = context;
+                final navigator = Navigator.of(ctx);
+                try {
+                  setStateDialogRef?.call(() => isSubmitting = true);
+                  final programTitle = titleController.text.trim();
+                  await EventService.updateEvent(
+                    eventId: event.eventId,
+                    title: programTitle,
+                    description: descriptionController.text.trim(),
+                    totalHoursForCertificate: double.parse(
+                      hoursController.text.trim(),
+                    ),
+                  );
+                  if (!ctx.mounted) return;
+                  navigator.pop();
+                  FeedbackOverlay.showSuccess(ctx, 'Programa "$programTitle" actualizado exitosamente');
+                  setState(() {});
+                } catch (e) {
+                  if (!ctx.mounted) return;
+                  FeedbackOverlay.showError(ctx, 'No se pudo actualizar el programa');
+                } finally {
+                  setStateDialogRef?.call(() => isSubmitting = false);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Guardar'),
+            );
+          },
+        ),
+      ],
     );
   }
 
-  void _showEditSubEventDialog(SubEventModel subEvent) {
-    final formKey = GlobalKey<FormState>();
-    final titleController = TextEditingController(text: subEvent.title);
-    final locationController = TextEditingController(text: subEvent.location);
-    final maxVolController = TextEditingController(text: subEvent.maxVolunteers.toString());
-    DateTime date = subEvent.date;
-    TimeOfDay start = TimeOfDay(hour: subEvent.startTime.hour, minute: subEvent.startTime.minute);
-    TimeOfDay end = TimeOfDay(hour: subEvent.endTime.hour, minute: subEvent.endTime.minute);
-
-    void pickDate() async {
-      final picked = await showDatePicker(
-        context: context,
-        initialDate: date,
-        firstDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
-        lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-      );
-      if (picked != null) {
-        setState(() => date = picked);
-      }
-    }
-
-    void pickStartTime() async {
-      final picked = await showTimePicker(
-        context: context,
-        initialTime: start,
-      );
-      if (picked != null) {
-        setState(() => start = picked);
-      }
-    }
-
-    void pickEndTime() async {
-      final picked = await showTimePicker(
-        context: context,
-        initialTime: end,
-      );
-      if (picked != null) {
-        setState(() => end = picked);
-      }
-    }
-
-    String formatTime(TimeOfDay t) {
-      final dt = DateTime(0, 1, 1, t.hour, t.minute);
-      return DateFormat('HH:mm').format(dt);
-    }
-
-    showDialog(
+  void _showScanMethodPicker(EventModel event) {
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Editar Actividad'),
-        content: Form(
-          key: formKey,
-          child: SingleChildScrollView(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextFormField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Título'),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Ingresa un título'
-                      : null,
+                const Icon(
+                  Icons.how_to_vote,
+                  size: 36,
+                  color: AppColors.primary,
                 ),
                 const SizedBox(height: 8),
+                const Text(
+                  '¿Cómo deseas pasar asistencia?',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 16),
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: pickDate,
-                        icon: const Icon(Icons.calendar_today),
-                        label: Text(DateFormat('dd/MM/yyyy').format(date)),
+                      child: _ScanMethodCard(
+                        icon: Icons.qr_code_scanner,
+                        title: 'Escanear QR',
+                        subtitle: 'Usa la cámara para escanear códigos',
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _showSelectSubEventForScanMethod(
+                            event,
+                            ScanMethod.qr,
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _ScanMethodCard(
+                        icon: Icons.list_alt,
+                        title: 'Por lista',
+                        subtitle: 'Marca manualmente a los inscritos',
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _showSelectSubEventForScanMethod(
+                            event,
+                            ScanMethod.list,
+                          );
+                        },
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: pickStartTime,
-                        icon: const Icon(Icons.access_time),
-                        label: Text('Inicio: ${formatTime(start)}'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: pickEndTime,
-                        icon: const Icon(Icons.access_time),
-                        label: Text('Fin: ${formatTime(end)}'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: locationController,
-                  decoration: const InputDecoration(labelText: 'Ubicación'),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Ingresa la ubicación'
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: maxVolController,
-                  decoration: const InputDecoration(labelText: 'Cupo máximo'),
-                  keyboardType: TextInputType.number,
-                  validator: (v) {
-                    final value = int.tryParse(v ?? '');
-                    if (value == null || value <= 0) {
-                      return 'Ingresa un número válido (>0)';
-                    }
-                    return null;
-                  },
-                ),
               ],
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              final startDateTime = DateTime(date.year, date.month, date.day, start.hour, start.minute);
-              final endDateTime = DateTime(date.year, date.month, date.day, end.hour, end.minute);
-              // Pre-capturar Navigator y ScaffoldMessenger para evitar usar BuildContext tras await
-              final navigator = Navigator.of(context);
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                await EventService.updateSubEvent(
-                  subEventId: subEvent.subEventId,
-                  title: titleController.text.trim(),
-                  date: date,
-                  startTime: startDateTime,
-                  endTime: endDateTime,
-                  location: locationController.text.trim(),
-                  maxVolunteers: int.parse(maxVolController.text.trim()),
-                );
-                navigator.pop();
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Actividad actualizada')),
-                );
-                if (!mounted) return;
-                setState(() {});
-              } catch (e) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Error al actualizar: $e')),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  void _showSelectSubEventForScan(EventModel event) {
+  void _showSelectSubEventForScanMethod(EventModel event, ScanMethod method) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1491,7 +2004,10 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
                     children: [
-                      const Icon(Icons.qr_code_scanner, color: AppColors.primary),
+                      const Icon(
+                        Icons.qr_code_scanner,
+                        color: AppColors.primary,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1513,10 +2029,14 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+                                const Icon(
+                                  Icons.error_outline,
+                                  size: 48,
+                                  color: AppColors.error,
+                                ),
                                 const SizedBox(height: 8),
-                                Text(
-                                  'Error al cargar actividades: ${snapshot.error}',
+                                const Text(
+                                  'No se pudieron cargar las actividades',
                                   textAlign: TextAlign.center,
                                 ),
                               ],
@@ -1525,7 +2045,11 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                         );
                       }
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                          ),
+                        );
                       }
                       final subEvents = snapshot.data ?? [];
                       if (subEvents.isEmpty) {
@@ -1535,9 +2059,15 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.event_busy, size: 48, color: Colors.grey),
+                                const Icon(
+                                  Icons.event_busy,
+                                  size: 48,
+                                  color: Colors.grey,
+                                ),
                                 const SizedBox(height: 8),
-                                const Text('No hay actividades. Crea una para pasar asistencia.'),
+                                const Text(
+                                  'No hay actividades. Crea una para pasar asistencia.',
+                                ),
                                 const SizedBox(height: 12),
                                 ElevatedButton.icon(
                                   onPressed: () {
@@ -1565,20 +2095,37 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                           return ListTile(
                             leading: const Icon(Icons.event),
                             title: Text(s.title),
-                            subtitle: Text('${_formatDate(s.date)} • ${_formatTime(s.startTime)} - ${_formatTime(s.endTime)}'),
+                            subtitle: Text(
+                              '${_formatDate(s.date)} • ${_formatTime(s.startTime)} - ${_formatTime(s.endTime)}',
+                            ),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
                               Navigator.of(context).pop();
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => CoordinatorStudentQRScannerScreen(
-                                    eventId: event.eventId,
-                                    subEventId: s.subEventId,
-                                    eventTitle: event.title,
-                                    subEventTitle: s.title,
+                              if (method == ScanMethod.qr) {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        CoordinatorStudentQRScannerScreen(
+                                          eventId: event.eventId,
+                                          subEventId: s.subEventId,
+                                          eventTitle: event.title,
+                                          subEventTitle: s.title,
+                                        ),
                                   ),
-                                ),
-                              );
+                                );
+                              } else {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => AttendanceListScreen(
+                                      coordinatorId: widget.user.uid,
+                                      eventId: event.eventId,
+                                      subEventId: s.subEventId,
+                                      eventTitle: event.title,
+                                      subEventTitle: s.title,
+                                    ),
+                                  ),
+                                );
+                              }
                             },
                           );
                         },
@@ -1591,47 +2138,6 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
           },
         );
       },
-    );
-  }
-
-  void _showDeleteSubEventDialog(SubEventModel subEvent) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar Actividad'),
-        content: Text(
-          '¿Estás seguro de que quieres eliminar "${subEvent.title}"? Esta acción no se puede deshacer.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              // Pre-capturar el ScaffoldMessenger para evitar usar BuildContext tras la operación async
-              final messenger = ScaffoldMessenger.of(context);
-              Navigator.of(context).pop();
-              EventService.deleteSubEvent(subEvent.subEventId).then((_) {
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Actividad eliminada')),
-                );
-                if (!mounted) return;
-                setState(() {});
-              }).catchError((e) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Error al eliminar: $e')),
-                );
-              });
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1663,5 +2169,58 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
 
   String _formatTime(DateTime time) {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+// Tarjeta reutilizable para seleccionar el método de asistencia
+class _ScanMethodCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ScanMethodCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 32, color: AppColors.primary),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

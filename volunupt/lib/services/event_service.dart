@@ -13,9 +13,32 @@ class EventService {
         .collection(_eventsCollection)
         .where('status', isEqualTo: EventStatus.publicado.toString().split('.').last)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => EventModel.fromSnapshot(doc))
-            .toList());
+        .asyncMap((snapshot) async {
+          final events = snapshot.docs.map((doc) => EventModel.fromSnapshot(doc)).toList();
+          final now = DateTime.now();
+          final List<EventModel> pending = [];
+          for (final e in events) {
+            try {
+              final subsQuery = await _firestore
+                  .collection(_subEventsCollection)
+                  .where('baseEventId', isEqualTo: e.eventId)
+                  .get();
+              if (subsQuery.docs.isEmpty) {
+                pending.add(e);
+                continue;
+              }
+              final subs = subsQuery.docs.map((d) => SubEventModel.fromSnapshot(d)).toList();
+              final hasCompleted = subs.every((s) => s.endTime.isBefore(now));
+              final hasStarted = subs.any((s) => !s.endTime.isBefore(now) && s.startTime.isBefore(now));
+              if (!hasStarted && !hasCompleted) {
+                pending.add(e);
+              }
+            } catch (_) {
+              pending.add(e);
+            }
+          }
+          return pending;
+        });
   }
 
   // Obtener eventos por coordinador
@@ -156,11 +179,36 @@ class EventService {
     required String baseEventId,
   }) async {
     try {
+      // Evitar duplicados
+      final existing = await _firestore
+          .collection(_registrationsCollection)
+          .where('userId', isEqualTo: userId)
+          .where('subEventId', isEqualTo: subEventId)
+          .limit(1)
+          .get();
+      if (existing.docs.isNotEmpty) {
+        return; // Ya inscrito
+      }
+
+      final subDoc = await _firestore.collection(_subEventsCollection).doc(subEventId).get();
+      if (!subDoc.exists) {
+        throw Exception('La actividad no existe');
+      }
+      final subEvent = SubEventModel.fromSnapshot(subDoc);
+      final now = DateTime.now();
+      final hasEnded = subEvent.endTime.isBefore(now);
+      final hasStarted = !hasEnded && subEvent.startTime.isBefore(now);
+      if (hasStarted || hasEnded) {
+        throw Exception('La actividad ya inició o finalizó');
+      }
+      if (subEvent.registeredCount >= subEvent.maxVolunteers) {
+        throw Exception('La actividad está llena');
+      }
+
       final batch = _firestore.batch();
 
-      // Crear registro de inscripción
       final registration = RegistrationModel(
-        registrationId: '', // Se asignará automáticamente
+        registrationId: '',
         userId: userId,
         subEventId: subEventId,
         baseEventId: baseEventId,
@@ -170,7 +218,6 @@ class EventService {
       final registrationRef = _firestore.collection(_registrationsCollection).doc();
       batch.set(registrationRef, registration.toMap());
 
-      // Incrementar contador de inscritos en el subevento
       final subEventRef = _firestore.collection(_subEventsCollection).doc(subEventId);
       batch.update(subEventRef, {
         'registeredCount': FieldValue.increment(1),
@@ -187,6 +234,24 @@ class EventService {
     required String baseEventId,
   }) async {
     try {
+      // Evitar duplicados
+      final existing = await _firestore
+          .collection(_registrationsCollection)
+          .where('userId', isEqualTo: userId)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .where('subEventId', isEqualTo: '')
+          .limit(1)
+          .get();
+      if (existing.docs.isNotEmpty) {
+        return; // Ya inscrito al programa
+      }
+
+      // Bloquear inscripción si el evento ya inició
+      final started = await hasEventStarted(baseEventId);
+      if (started) {
+        throw Exception('El programa ya inició, las inscripciones al programa están cerradas');
+      }
+
       final registration = RegistrationModel(
         registrationId: '',
         userId: userId,
@@ -210,6 +275,18 @@ class EventService {
     try {
       final batch = _firestore.batch();
 
+      final subDoc = await _firestore.collection(_subEventsCollection).doc(subEventId).get();
+      if (!subDoc.exists) {
+        throw Exception('La actividad no existe');
+      }
+      final subEvent = SubEventModel.fromSnapshot(subDoc);
+      final now = DateTime.now();
+      final hasEnded = subEvent.endTime.isBefore(now);
+      final hasStarted = !hasEnded && subEvent.startTime.isBefore(now);
+      if (hasStarted || hasEnded) {
+        throw Exception('No se puede cancelar una actividad iniciada o finalizada');
+      }
+
       // Buscar y eliminar registro de inscripción
       final registrationQuery = await _firestore
           .collection(_registrationsCollection)
@@ -221,7 +298,6 @@ class EventService {
         final registrationDoc = registrationQuery.docs.first;
         batch.delete(registrationDoc.reference);
 
-        // Decrementar contador de inscritos en el subevento
         final subEventRef = _firestore.collection(_subEventsCollection).doc(subEventId);
         batch.update(subEventRef, {
           'registeredCount': FieldValue.increment(-1),
@@ -239,6 +315,11 @@ class EventService {
     required String baseEventId,
   }) async {
     try {
+      // Bloquear cancelación si el evento ya inició
+      final started = await hasEventStarted(baseEventId);
+      if (started) {
+        throw Exception('No se puede cancelar una inscripción del programa iniciado');
+      }
       final query = await _firestore
           .collection(_registrationsCollection)
           .where('userId', isEqualTo: userId)
@@ -253,28 +334,75 @@ class EventService {
     }
   }
 
+  // Determinar si el programa ya inició (si cualquier actividad ha comenzado)
+  static Future<bool> hasEventStarted(String baseEventId) async {
+    try {
+      final subEventsQuery = await _firestore
+          .collection(_subEventsCollection)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .get();
+      final now = DateTime.now();
+      for (final doc in subEventsQuery.docs) {
+        final s = SubEventModel.fromSnapshot(doc);
+        final hasEnded = s.endTime.isBefore(now);
+        final hasStarted = !hasEnded && s.startTime.isBefore(now);
+        if (hasStarted) return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Determinar si el programa ya finalizó (todas las actividades terminaron)
+  static Future<bool> hasEventCompleted(String baseEventId) async {
+    try {
+      final subEventsQuery = await _firestore
+          .collection(_subEventsCollection)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .get();
+      if (subEventsQuery.docs.isEmpty) return false;
+      final now = DateTime.now();
+      for (final doc in subEventsQuery.docs) {
+        final s = SubEventModel.fromSnapshot(doc);
+        if (!s.endTime.isBefore(now)) {
+          return false;
+        }
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Obtener inscripciones de un usuario
   static Stream<List<RegistrationModel>> getUserRegistrations(String userId) {
+    // Evitar requerir índice compuesto: ordenar en memoria
     return _firestore
         .collection(_registrationsCollection)
         .where('userId', isEqualTo: userId)
-        .orderBy('registeredAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => RegistrationModel.fromSnapshot(doc))
-            .toList());
+        .map((snapshot) {
+          final list = snapshot.docs.map((doc) => RegistrationModel.fromSnapshot(doc)).toList();
+          list.sort((a, b) => b.registeredAt.compareTo(a.registeredAt));
+          return list;
+        });
   }
 
   // Obtener inscripciones de un subevento
   static Stream<List<RegistrationModel>> getSubEventRegistrations(String subEventId) {
+    // Evitamos requerir un índice compuesto eliminando orderBy de Firestore y ordenando en memoria.
     return _firestore
         .collection(_registrationsCollection)
         .where('subEventId', isEqualTo: subEventId)
-        .orderBy('registeredAt')
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => RegistrationModel.fromSnapshot(doc))
-            .toList());
+        .map((snapshot) {
+          final list = snapshot.docs
+              .map((doc) => RegistrationModel.fromSnapshot(doc))
+              .toList();
+          list.sort((a, b) => a.registeredAt.compareTo(b.registeredAt));
+          return list;
+        });
   }
   // Obtener inscripciones del programa (evento base)
   static Stream<List<RegistrationModel>> getEventRegistrations(String baseEventId) {
@@ -282,11 +410,49 @@ class EventService {
         .collection(_registrationsCollection)
         .where('baseEventId', isEqualTo: baseEventId)
         .where('subEventId', isEqualTo: '')
-        .orderBy('registeredAt')
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => RegistrationModel.fromSnapshot(doc))
-            .toList());
+        .map((snapshot) {
+          final list = snapshot.docs
+              .map((doc) => RegistrationModel.fromSnapshot(doc))
+              .toList();
+          list.sort((a, b) => a.registeredAt.compareTo(b.registeredAt));
+          return list;
+        });
+  }
+
+  // Obtener inscripciones del usuario a subeventos de un evento base
+  static Future<List<RegistrationModel>> getUserSubEventRegistrationsForEvent({
+    required String userId,
+    required String baseEventId,
+  }) async {
+    try {
+      final query = await _firestore
+          .collection(_registrationsCollection)
+          .where('userId', isEqualTo: userId)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .get();
+      return query.docs
+          .map((doc) => RegistrationModel.fromSnapshot(doc))
+          .where((reg) => reg.subEventId.isNotEmpty)
+          .toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Obtener todas las inscripciones ligadas a un programa (incluye subeventos y programa base)
+  static Stream<List<RegistrationModel>> getAllRegistrationsByEvent(String baseEventId) {
+    return _firestore
+        .collection(_registrationsCollection)
+        .where('baseEventId', isEqualTo: baseEventId)
+        .snapshots()
+        .map((snapshot) {
+          final list = snapshot.docs
+              .map((doc) => RegistrationModel.fromSnapshot(doc))
+              .toList();
+          list.sort((a, b) => a.registeredAt.compareTo(b.registeredAt));
+          return list;
+        });
   }
 
   // Crear nuevo evento (solo coordinadores/administradores)
@@ -302,6 +468,8 @@ class EventService {
     DateTime? singleSessionStartTime,
     DateTime? singleSessionEndTime,
     String? singleSessionLocation,
+    double? singleSessionLatitude,
+    double? singleSessionLongitude,
     int? singleSessionMaxVolunteers,
   }) async {
     try {
@@ -342,6 +510,8 @@ class EventService {
           startTime: singleSessionStartTime,
           endTime: singleSessionEndTime,
           location: singleSessionLocation,
+          latitude: singleSessionLatitude,
+          longitude: singleSessionLongitude,
           maxVolunteers: singleSessionMaxVolunteers,
         );
       }
@@ -360,6 +530,8 @@ class EventService {
     required DateTime startTime,
     required DateTime endTime,
     required String location,
+    double? latitude,
+    double? longitude,
     required int maxVolunteers,
   }) async {
     try {
@@ -371,6 +543,8 @@ class EventService {
         startTime: startTime,
         endTime: endTime,
         location: location,
+        latitude: latitude,
+        longitude: longitude,
         maxVolunteers: maxVolunteers,
         registeredCount: 0,
         qrCodeData: '', // Se generará después
@@ -490,6 +664,8 @@ class EventService {
     required DateTime startTime,
     required DateTime endTime,
     required String location,
+    double? latitude,
+    double? longitude,
     required int maxVolunteers,
   }) async {
     try {
@@ -499,6 +675,8 @@ class EventService {
         'startTime': Timestamp.fromDate(startTime),
         'endTime': Timestamp.fromDate(endTime),
         'location': location,
+        'latitude': latitude,
+        'longitude': longitude,
         'maxVolunteers': maxVolunteers,
       };
 
@@ -548,5 +726,65 @@ class EventService {
     } catch (e) {
       throw Exception('Error al obtener subevento: $e');
     }
+  }
+
+  // Conteos para estadísticas
+  static Future<int> countEventsByCoordinator(String coordinatorId) async {
+    final q = await _firestore
+        .collection(_eventsCollection)
+        .where('coordinatorId', isEqualTo: coordinatorId)
+        .get();
+    return q.docs.length;
+  }
+
+  static Future<int> countPublishedEvents() async {
+    final q = await _firestore
+        .collection(_eventsCollection)
+        .where('status', isEqualTo: EventStatus.publicado.toString().split('.').last)
+        .get();
+    return q.docs.length;
+  }
+
+  static Future<int> countSubEventsByCoordinator(String coordinatorId) async {
+    final events = await _firestore
+        .collection(_eventsCollection)
+        .where('coordinatorId', isEqualTo: coordinatorId)
+        .get();
+
+    final eventIds = events.docs.map((d) => d.id).toList();
+    if (eventIds.isEmpty) return 0;
+
+    int total = 0;
+    const chunkSize = 10;
+    for (var i = 0; i < eventIds.length; i += chunkSize) {
+      final chunk = eventIds.sublist(i, i + chunkSize > eventIds.length ? eventIds.length : i + chunkSize);
+      final q = await _firestore
+          .collection(_subEventsCollection)
+          .where('baseEventId', whereIn: chunk)
+          .get();
+      total += q.docs.length;
+    }
+    return total;
+  }
+
+  static Future<int> countRegistrationsByCoordinator(String coordinatorId) async {
+    final events = await _firestore
+        .collection(_eventsCollection)
+        .where('coordinatorId', isEqualTo: coordinatorId)
+        .get();
+    final eventIds = events.docs.map((d) => d.id).toList();
+    if (eventIds.isEmpty) return 0;
+
+    int total = 0;
+    const chunkSize = 10;
+    for (var i = 0; i < eventIds.length; i += chunkSize) {
+      final chunk = eventIds.sublist(i, i + chunkSize > eventIds.length ? eventIds.length : i + chunkSize);
+      final q = await _firestore
+          .collection(_registrationsCollection)
+          .where('baseEventId', whereIn: chunk)
+          .get();
+      total += q.docs.length;
+    }
+    return total;
   }
 }

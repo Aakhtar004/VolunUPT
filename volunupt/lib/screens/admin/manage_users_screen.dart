@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../services/services.dart';
+import '../../utils/app_colors.dart';
+import '../../utils/skeleton_loader.dart';
 
 class ManageUsersScreen extends StatefulWidget {
   final UserModel user;
@@ -28,7 +30,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
         title: const Text(
           'Gestionar Usuarios',
@@ -37,7 +39,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             color: Colors.white,
           ),
         ),
-        backgroundColor: const Color(0xFF8B5CF6),
+        backgroundColor: AppColors.primary,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -72,7 +74,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             onChanged: (value) => setState(() => _searchQuery = value),
             decoration: InputDecoration(
             hintText: 'Buscar por nombre o email...',
-              prefixIcon: const Icon(Icons.search, color: Color(0xFF8B5CF6)),
+              prefixIcon: const Icon(Icons.search, color: AppColors.primary),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
                       onPressed: () {
@@ -88,10 +90,10 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFF8B5CF6)),
+                borderSide: const BorderSide(color: AppColors.primary),
               ),
               filled: true,
-              fillColor: Colors.grey[50],
+              fillColor: AppColors.backgroundLight,
             ),
           ),
           const SizedBox(height: 16),
@@ -126,21 +128,21 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           Icon(
             icon,
             size: 16,
-            color: isSelected ? Colors.white : const Color(0xFF8B5CF6),
+            color: isSelected ? Colors.white : AppColors.primary,
           ),
           const SizedBox(width: 4),
           Text(label),
         ],
       ),
-      selectedColor: const Color(0xFF8B5CF6),
+      selectedColor: AppColors.primary,
       checkmarkColor: Colors.white,
       labelStyle: TextStyle(
-        color: isSelected ? Colors.white : const Color(0xFF8B5CF6),
+        color: isSelected ? Colors.white : AppColors.primary,
         fontWeight: FontWeight.w500,
       ),
       backgroundColor: Colors.white,
       side: BorderSide(
-        color: isSelected ? const Color(0xFF8B5CF6) : Colors.grey[300]!,
+        color: isSelected ? AppColors.primary : Colors.grey[300]!,
       ),
     );
   }
@@ -149,6 +151,24 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     return FutureBuilder<Map<String, int>>(
       future: _getUserStats(),
       builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: const Row(
+              children: [
+                Expanded(child: StatCardSkeleton()),
+                SizedBox(width: 8),
+                Expanded(child: StatCardSkeleton()),
+                SizedBox(width: 8),
+                Expanded(child: StatCardSkeleton()),
+                SizedBox(width: 8),
+                Expanded(child: StatCardSkeleton()),
+              ],
+            ),
+          );
+        }
+
         final stats = snapshot.data ?? {
           'total': 0,
           'students': 0,
@@ -166,7 +186,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   'Total',
                   stats['total']!,
                   Icons.people,
-                  const Color(0xFF8B5CF6),
+                  AppColors.primary,
                 ),
               ),
               const SizedBox(width: 8),
@@ -175,7 +195,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   'Estudiantes',
                   stats['students']!,
                   Icons.school,
-                  Colors.blue,
+                  AppColors.success,
                 ),
               ),
               const SizedBox(width: 8),
@@ -184,7 +204,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   'Coordinadores',
                   stats['coordinators']!,
                   Icons.supervisor_account,
-                  Colors.green,
+                  AppColors.accent,
                 ),
               ),
               const SizedBox(width: 8),
@@ -193,7 +213,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   'Admins',
                   stats['admins']!,
                   Icons.admin_panel_settings,
-                  Colors.orange,
+                  AppColors.primary,
                 ),
               ),
             ],
@@ -240,10 +260,9 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       future: UserService.getAllUsers(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(
-              color: Color(0xFF8B5CF6),
-            ),
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: ListItemSkeleton(),
           );
         }
 
@@ -261,7 +280,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
         return RefreshIndicator(
           onRefresh: () async => setState(() {}),
-          color: const Color(0xFF8B5CF6),
+          color: AppColors.primary,
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: filteredUsers.length,
@@ -320,7 +339,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1F2937),
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         Text(
@@ -330,7 +349,15 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                             color: Colors.grey[600],
                           ),
                         ),
-                        // Información adicional del estudiante (pendiente: campos académicos)
+                        if (user.role == UserRole.estudiante)
+                          Text(
+                            '${user.totalHours.toStringAsFixed(1)} horas acumuladas',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[500],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -372,13 +399,42 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              
-              // Información adicional del estudiante (pendiente: integrar campos académicos si están disponibles)
-              
               Row(
                 children: [
                   _buildRoleChip(user.role),
+                  const SizedBox(width: 8),
+                  if (user.role == UserRole.estudiante && user.totalHours > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.access_time, size: 12, color: AppColors.success),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${user.totalHours.toStringAsFixed(1)}h',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   const Spacer(),
+                  Text(
+                    'ID: ${user.uid.substring(0, 8)}...',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Colors.grey[400],
+                      fontFamily: 'monospace',
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -477,11 +533,11 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   Color _getRoleColor(UserRole role) {
     switch (role) {
       case UserRole.estudiante:
-        return Colors.blue;
+        return AppColors.success;
       case UserRole.coordinador:
-        return Colors.green;
+        return AppColors.accent;
       case UserRole.administrador:
-        return Colors.orange;
+        return AppColors.primary;
     }
   }
 
@@ -530,7 +586,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Funcionalidad de creación de usuarios próximamente'),
-        backgroundColor: Color(0xFF8B5CF6),
+        backgroundColor: AppColors.primary,
       ),
     );
   }
@@ -539,7 +595,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Detalles de: ${user.displayName}'),
-        backgroundColor: const Color(0xFF8B5CF6),
+        backgroundColor: AppColors.primary,
       ),
     );
   }
@@ -562,6 +618,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
   void _showChangeRoleDialog(UserModel user) {
     UserRole selectedRole = user.role;
+    // Capturar el ScaffoldMessenger del screen principal antes de abrir el diálogo
+    final rootMessenger = ScaffoldMessenger.of(context);
 
     showDialog(
       context: context,
@@ -605,27 +663,28 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
               onPressed: selectedRole != user.role
                   ? () async {
                       // Capturar messenger del scaffold principal ANTES de operaciones asíncronas
-                      final messenger = ScaffoldMessenger.of(this.context);
+                      // Usar el messenger capturado del contexto principal
+                      final messenger = rootMessenger;
                       // Cerrar el diálogo
                       Navigator.of(context).pop();
                       try {
                         await UserService.updateUserRole(user.uid, selectedRole);
                         // Forzar refresco de la lista en el screen principal
                         if (mounted) {
-                          this.setState(() {});
+                          setState(() {});
                         }
                         messenger.showSnackBar(
                           SnackBar(content: Text('Rol actualizado a ${selectedRole.name}')),
                         );
                       } catch (e) {
                         messenger.showSnackBar(
-                          SnackBar(content: Text('Error al cambiar rol: $e')),
+                          const SnackBar(content: Text('No se pudo cambiar el rol del usuario')),
                         );
                       }
                     }
                   : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF8B5CF6),
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
               ),
               child: const Text('Cambiar'),

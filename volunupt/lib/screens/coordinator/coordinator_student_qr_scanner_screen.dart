@@ -2,12 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:flutter/services.dart';
 
 import '../../services/student_qr_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/attendance_service.dart';
 import '../../services/user_service.dart';
 import '../../models/models.dart';
+import '../../utils/feedback_overlay.dart';
+import '../../utils/app_dialogs.dart';
+import '../../utils/app_colors.dart';
 
 class CoordinatorStudentQRScannerScreen extends StatefulWidget {
   final String eventId;
@@ -30,7 +34,33 @@ class CoordinatorStudentQRScannerScreen extends StatefulWidget {
 class _CoordinatorStudentQRScannerScreenState extends State<CoordinatorStudentQRScannerScreen> {
   final MobileScannerController _controller = MobileScannerController(formats: [BarcodeFormat.qrCode]);
   bool _processing = false;
+  bool _confirming = false;
   String? _lastCode;
+
+  @override
+  void initState() {
+    super.initState();
+    _verifyCoordinatorSessionOnOpen();
+  }
+
+  Future<void> _verifyCoordinatorSessionOnOpen() async {
+    try {
+      final current = await AuthService.getCurrentUserData();
+      if (!mounted) return;
+      if (current == null || current.role != UserRole.coordinador) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showMessage('No autorizado. Inicia sesión como coordinador.');
+          Navigator.of(context).pop();
+        });
+      }
+    } catch (_) {
+      // Si falla la verificación, no bloquear, pero mostrar aviso.
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showMessage('No se pudo verificar la sesión. Intenta nuevamente.');
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -66,7 +96,7 @@ class _CoordinatorStudentQRScannerScreenState extends State<CoordinatorStudentQR
       if (!mounted) return;
       await _showConfirmSheet(studentProfile);
     } catch (e) {
-      _showMessage('Error procesando QR: $e');
+      _showMessage('No se pudo procesar el código QR');
     } finally {
       if (mounted) setState(() => _processing = false);
     }
@@ -77,56 +107,38 @@ class _CoordinatorStudentQRScannerScreenState extends State<CoordinatorStudentQR
     final email = student?.email ?? '';
     final eventTitle = widget.eventTitle ?? 'Evento';
     final subEventTitle = widget.subEventTitle ?? 'Actividad';
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Confirmar asistencia', style: Theme.of(ctx).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.person)),
-                title: Text(name),
-                subtitle: Text(email),
-              ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.event),
-                title: Text(eventTitle),
-                subtitle: Text(subEventTitle),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      child: const Text('Cancelar'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () async {
-                        Navigator.of(ctx).pop();
-                        await _confirmCheckIn(student?.uid);
-                      },
-                      icon: const Icon(Icons.check),
-                      label: const Text('Pasar asistencia'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
+    AppDialogs.modal(
+      context,
+      title: 'Confirmar asistencia',
+      icon: Icons.qr_code_scanner,
+      iconColor: AppColors.primary,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.person)),
+            title: Text(name),
+            subtitle: Text(email),
           ),
-        );
-      },
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.event),
+            title: Text(eventTitle),
+            subtitle: Text(subEventTitle),
+          ),
+        ],
+      ),
+      actions: [
+        AppDialogs.cancelAction(onPressed: () => Navigator.of(context).pop()),
+        AppDialogs.primaryAction(
+          label: 'Pasar asistencia',
+          onPressed: () async {
+            Navigator.of(context).pop();
+            await _confirmCheckIn(student?.uid);
+          },
+        ),
+      ],
     );
   }
 
@@ -135,6 +147,8 @@ class _CoordinatorStudentQRScannerScreenState extends State<CoordinatorStudentQR
       _showMessage('Estudiante inválido');
       return;
     }
+    if (_confirming) return; // Evita doble envío por múltiples clics
+    setState(() => _confirming = true);
     try {
       final coordinator = await AuthService.getCurrentUserData();
       if (coordinator == null) {
@@ -164,25 +178,19 @@ class _CoordinatorStudentQRScannerScreenState extends State<CoordinatorStudentQR
       if (!mounted) return;
       _showSuccess();
     } catch (e) {
-      _showMessage('Error al registrar asistencia: $e');
+      _showMessage('No se pudo registrar la asistencia');
+    } finally {
+      if (mounted) setState(() => _confirming = false);
     }
   }
 
   void _showSuccess() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Asistencia registrada'),
-        content: const Text('Se registró la asistencia correctamente.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
-        ],
-      ),
-    );
+    HapticFeedback.lightImpact();
+    FeedbackOverlay.showSuccess(context, 'Se registró la asistencia correctamente.');
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    FeedbackOverlay.showError(context, message);
   }
 
   @override
@@ -192,6 +200,8 @@ class _CoordinatorStudentQRScannerScreenState extends State<CoordinatorStudentQR
     return Scaffold(
       appBar: AppBar(
         title: const Text('Pasar asistencia'),
+        backgroundColor: AppColors.primary,
+        iconTheme: const IconThemeData(color: Colors.white),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(24),
           child: Padding(
@@ -224,6 +234,29 @@ class _CoordinatorStudentQRScannerScreenState extends State<CoordinatorStudentQR
                 'Escanea el QR del estudiante para registrar asistencia',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white),
               ),
+            ),
+          ),
+          Positioned(
+            right: 16,
+            bottom: 72,
+            child: Column(
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'torch',
+                  backgroundColor: Colors.black.withAlpha(153),
+                  foregroundColor: Colors.white,
+                  onPressed: () => _controller.toggleTorch(),
+                  child: const Icon(Icons.flashlight_on),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.small(
+                  heroTag: 'camera',
+                  backgroundColor: Colors.black.withAlpha(153),
+                  foregroundColor: Colors.white,
+                  onPressed: () => _controller.switchCamera(),
+                  child: const Icon(Icons.cameraswitch),
+                ),
+              ],
             ),
           ),
         ],

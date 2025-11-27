@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/app_colors.dart';
 import '../../models/models.dart';
 import '../../services/services.dart';
 
@@ -249,25 +250,25 @@ class _HistoryScreenState extends State<HistoryScreen>
                       'Horas Confirmadas',
                       '${totalHours.toStringAsFixed(1)}h',
                       Icons.check_circle,
-                      Colors.green,
+                      AppColors.success,
                     ),
                     _buildStatCard(
                       'Total de Horas',
                       '${totalHours.toStringAsFixed(1)}h',
                       Icons.access_time,
-                      Colors.blue,
+                      AppColors.primary,
                     ),
                     _buildStatCard(
                       'Estado',
                       'Activo',
                       Icons.person,
-                      Colors.purple,
+                      AppColors.primary,
                     ),
                     _buildStatCard(
                       'Progreso',
                       '100%',
                       Icons.trending_up,
-                      Colors.orange,
+                      AppColors.accent,
                     ),
                   ],
                 ),
@@ -435,7 +436,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                 _buildInfoChip(
                   Icons.access_time,
                   '${attendance.hoursEarned.toStringAsFixed(1)} horas',
-                  Colors.blue,
+                  AppColors.primary,
                 ),
                 const SizedBox(width: 8),
                 _buildInfoChip(
@@ -522,28 +523,28 @@ class _HistoryScreenState extends State<HistoryScreen>
         return Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.green.withValues(alpha: 0.1),
+            color: AppColors.success.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+          child: const Icon(Icons.check_circle, color: AppColors.success, size: 20),
         );
       case AttendanceStatus.checkedIn:
         return Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.orange.withValues(alpha: 0.1),
+            color: AppColors.accent.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.pending, color: Colors.orange, size: 20),
+          child: const Icon(Icons.pending, color: AppColors.accent, size: 20),
         );
       case AttendanceStatus.absent:
         return Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.1),
+            color: AppColors.error.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.cancel, color: Colors.red, size: 20),
+          child: const Icon(Icons.cancel, color: AppColors.error, size: 20),
         );
     }
   }
@@ -554,15 +555,15 @@ class _HistoryScreenState extends State<HistoryScreen>
 
     switch (status) {
       case AttendanceStatus.validated:
-        color = Colors.green;
+        color = AppColors.success;
         label = 'Confirmada';
         break;
       case AttendanceStatus.checkedIn:
-        color = Colors.orange;
+        color = AppColors.accent;
         label = 'Pendiente';
         break;
       case AttendanceStatus.absent:
-        color = Colors.red;
+        color = AppColors.error;
         label = 'Rechazada';
         break;
     }

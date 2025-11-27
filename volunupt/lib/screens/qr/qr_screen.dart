@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../models/models.dart';
 import '../../services/student_qr_service.dart';
+import '../../utils/app_colors.dart';
 
 class QRScreen extends StatefulWidget {
   final UserModel user;
-  
+
   const QRScreen({super.key, required this.user});
 
   @override
@@ -36,17 +37,18 @@ class _QRScreenState extends State<QRScreen> {
       setState(() {
         _loading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cargar tu QR: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No se pudo cargar tu código QR. Intenta nuevamente')));
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mi Código QR'),
-        backgroundColor: const Color(0xFF1E3A8A),
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
       body: Center(
@@ -66,10 +68,11 @@ class _QRScreenState extends State<QRScreen> {
                     children: [
                       Text(
                         'Mi Código QR',
-                        style: Theme.of(context).textTheme.headlineSmall!.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF1E3A8A),
-                        ),
+                        style: Theme.of(context).textTheme.headlineSmall!
+                            .copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
                       ),
                       const SizedBox(height: 24),
                       if (_loading)
@@ -95,9 +98,8 @@ class _QRScreenState extends State<QRScreen> {
                       const SizedBox(height: 24),
                       Text(
                         widget.user.displayName,
-                        style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium!
+                            .copyWith(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -113,13 +115,17 @@ class _QRScreenState extends State<QRScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E3A8A).withValues(alpha: 0.1),
+                          color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          widget.user.role.toString().split('.').last.toUpperCase(),
+                          widget.user.role
+                              .toString()
+                              .split('.')
+                              .last
+                              .toUpperCase(),
                           style: const TextStyle(
-                            color: Color(0xFF1E3A8A),
+                            color: AppColors.primary,
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
                           ),
@@ -129,9 +135,28 @@ class _QRScreenState extends State<QRScreen> {
                       if (!_loading)
                         Text(
                           'QR listo para usar',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.grey.shade600,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: Colors.grey.shade600),
+                        ),
+                      const SizedBox(height: 8),
+                      if (!_loading)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.info_outline, size: 14, color: AppColors.accent),
+                              SizedBox(width: 6),
+                              Text(
+                                'Muestra este QR el día del evento',
+                                style: TextStyle(fontSize: 12, color: AppColors.accent),
                               ),
+                            ],
+                          ),
                         ),
                     ],
                   ),
@@ -141,9 +166,9 @@ class _QRScreenState extends State<QRScreen> {
               Text(
                 'Presenta este código QR al coordinador para registrar tu asistencia',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                  color: Colors.grey.shade600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium!.copyWith(color: Colors.grey.shade600),
               ),
             ],
           ),

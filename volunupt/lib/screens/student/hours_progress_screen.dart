@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../services/services.dart';
+import '../../utils/app_colors.dart';
 
 class HoursProgressScreen extends StatefulWidget {
   final UserModel user;
 
-  const HoursProgressScreen({
-    super.key,
-    required this.user,
-  });
+  const HoursProgressScreen({super.key, required this.user});
 
   @override
   State<HoursProgressScreen> createState() => _HoursProgressScreenState();
@@ -27,11 +25,15 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
 
   Future<void> _loadProgressData() async {
     setState(() => _isLoading = true);
-    
+
     try {
-      final stats = await HistoryService.getUserAttendanceStats(widget.user.uid);
-      final eligibleEvents = await CertificateService.getEligibleEventsForUser(widget.user.uid);
-      
+      final stats = await HistoryService.getUserAttendanceStats(
+        widget.user.uid,
+      );
+      final eligibleEvents = await CertificateService.getEligibleEventsForUser(
+        widget.user.uid,
+      );
+
       setState(() {
         _stats = stats;
         // Convertir la lista de mapas a solo la lista de eventos
@@ -45,7 +47,7 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al cargar datos: $e'),
+            content: const Text('No se pudieron cargar los datos. Intenta nuevamente'),
             backgroundColor: Colors.red,
           ),
         );
@@ -60,12 +62,9 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
       appBar: AppBar(
         title: const Text(
           'Progreso de Horas',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF1E3A8A),
+        backgroundColor: AppColors.primary,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -78,13 +77,11 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF1E3A8A),
-              ),
+              child: CircularProgressIndicator(color: AppColors.primary),
             )
           : RefreshIndicator(
               onRefresh: _loadProgressData,
-              color: const Color(0xFF1E3A8A),
+              color: AppColors.primary,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
@@ -113,14 +110,12 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
 
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: const LinearGradient(
-            colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+            colors: [AppColors.primary, AppColors.primary],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -185,7 +180,12 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon, Color iconColor) {
+  Widget _buildStatItem(
+    String label,
+    String value,
+    IconData icon,
+    Color iconColor,
+  ) {
     return Column(
       children: [
         Icon(icon, color: iconColor, size: 32),
@@ -212,49 +212,71 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
 
   Widget _buildMonthlyProgressCard() {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      elevation: 4,
+      shadowColor: Colors.black.withValues(alpha: 0.05),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(Icons.trending_up, color: Color(0xFF1E3A8A)),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.bar_chart_rounded,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
                 const Text(
                   'Progreso Mensual',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF1F2937),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             FutureBuilder<List<Map<String, dynamic>>>(
-              future: _getMonthlyProgress(),
+              future: HistoryService.getUserMonthlyStats(widget.user.uid),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: Padding(
-                      padding: EdgeInsets.all(20),
+                      padding: EdgeInsets.all(32),
                       child: CircularProgressIndicator(),
                     ),
                   );
                 }
 
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        'Error al cargar estadísticas',
+                        style: TextStyle(color: Colors.red[300]),
+                      ),
+                    ),
+                  );
+                }
+
                 final monthlyData = snapshot.data ?? [];
-                
+
                 if (monthlyData.isEmpty) {
                   return const Center(
                     child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text('No hay datos disponibles'),
+                      padding: EdgeInsets.all(32),
+                      child: Text('No hay datos disponibles para mostrar'),
                     ),
                   );
                 }
@@ -263,8 +285,8 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
                   children: monthlyData.map((data) {
                     return _buildMonthProgressBar(
                       data['month'] as String,
-                      data['hours'] as int,
-                      data['maxHours'] as int,
+                      (data['hours'] as num).toInt(),
+                      (data['maxHours'] as num).toInt(),
                     );
                   }).toList(),
                 );
@@ -278,7 +300,7 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
 
   Widget _buildMonthProgressBar(String month, int hours, int maxHours) {
     final progress = maxHours > 0 ? hours / maxHours : 0.0;
-    
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -299,7 +321,7 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E3A8A),
+                  color: AppColors.primary,
                 ),
               ),
             ],
@@ -308,7 +330,7 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
           LinearProgressIndicator(
             value: progress.clamp(0.0, 1.0),
             backgroundColor: Colors.grey[200],
-            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF1E3A8A)),
+            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
           ),
         ],
       ),
@@ -318,9 +340,7 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
   Widget _buildCertificationProgressCard() {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -328,7 +348,7 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.card_membership, color: Color(0xFF10B981)),
+                const Icon(Icons.card_membership, color: AppColors.success),
                 const SizedBox(width: 8),
                 const Text(
                   'Progreso hacia Certificados',
@@ -352,7 +372,9 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
                 ),
               )
             else
-              ...(_eligibleEvents.map((event) => _buildCertificationProgress(event))),
+              ...(_eligibleEvents.map(
+                (event) => _buildCertificationProgress(event),
+              )),
           ],
         ),
       ),
@@ -403,17 +425,14 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
                 children: [
                   Text(
                     '$userHours / $requiredHours horas',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                   Text(
                     '${(progress * 100).toInt()}%',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF10B981),
+                      color: AppColors.success,
                     ),
                   ),
                 ],
@@ -423,7 +442,7 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
                 value: progress.clamp(0.0, 1.0),
                 backgroundColor: Colors.grey[200],
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  isCompleted ? Colors.green : const Color(0xFF10B981),
+                  isCompleted ? AppColors.success : AppColors.success,
                 ),
               ),
             ],
@@ -436,9 +455,7 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
   Widget _buildRecentActivitiesCard() {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -449,7 +466,7 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.history, color: Color(0xFFF59E0B)),
+                    const Icon(Icons.history, color: AppColors.primary),
                     const SizedBox(width: 8),
                     const Text(
                       'Actividades Recientes',
@@ -481,7 +498,7 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
                 }
 
                 final activities = (snapshot.data ?? []).take(3).toList();
-                
+
                 if (activities.isEmpty) {
                   return const Center(
                     child: Padding(
@@ -505,40 +522,57 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
   }
 
   Widget _buildRecentActivityItem(Map<String, dynamic> activity) {
-    final status = activity['status'] as String;
-    final hours = activity['hours'] as int;
+    final attendance = activity['attendance'] as AttendanceRecordModel;
     final subEventName = activity['subEventName'] as String;
     final eventName = activity['eventName'] as String;
-    final date = DateTime.parse(activity['date'] as String);
+
+    final status = attendance.status;
+    final hours = attendance.hoursEarned;
+    final date = attendance.checkInTime;
 
     Color statusColor;
     IconData statusIcon;
-    
+
     switch (status) {
-      case 'confirmed':
-        statusColor = Colors.green;
+      case AttendanceStatus.validated:
+        statusColor = AppColors.success;
         statusIcon = Icons.check_circle;
         break;
-      case 'pending':
-        statusColor = Colors.orange;
+      case AttendanceStatus.checkedIn:
+        statusColor = AppColors.primary;
         statusIcon = Icons.schedule;
         break;
       default:
-        statusColor = Colors.red;
+        statusColor = AppColors.error;
         statusIcon = Icons.cancel;
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          Icon(statusIcon, color: statusColor, size: 20),
-          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(statusIcon, color: statusColor, size: 20),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -546,16 +580,15 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
                 Text(
                   subEventName,
                   style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1F2937),
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
                   eventName,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                 ),
               ],
             ),
@@ -564,19 +597,17 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '$hours h',
+                '${hours.toStringAsFixed(1)} h',
                 style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E3A8A),
+                  color: AppColors.primary,
                 ),
               ),
+              const SizedBox(height: 4),
               Text(
                 _formatDate(date),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey[500],
-                ),
+                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
               ),
             ],
           ),
@@ -585,24 +616,12 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
     );
   }
 
-  Future<List<Map<String, dynamic>>> _getMonthlyProgress() async {
-    // Simulación de datos mensuales - en implementación real vendría del servicio
-    final now = DateTime.now();
-    final months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
-    
-    return List.generate(6, (index) {
-      final monthIndex = (now.month - 6 + index) % 12;
-      return {
-        'month': months[monthIndex],
-        'hours': (index + 1) * 5, // Datos simulados
-        'maxHours': 20,
-      };
-    });
-  }
-
   Future<double> _getUserHoursForEvent(String eventId) async {
     try {
-      return await CertificateService.getUserTotalHoursForEvent(widget.user.uid, eventId);
+      return await CertificateService.getUserTotalHoursForEvent(
+        widget.user.uid,
+        eventId,
+      );
     } catch (e) {
       return 0.0;
     }
@@ -610,8 +629,18 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
 
   String _formatDate(DateTime date) {
     final months = [
-      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
     ];
     return '${date.day} ${months[date.month - 1]}';
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/app_colors.dart';
 import '../../models/models.dart';
 import '../../services/services.dart';
 
@@ -33,7 +34,7 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mis Certificados'),
-        backgroundColor: const Color(0xFF1E3A8A),
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -62,10 +63,6 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                // Información del usuario
-                _buildCertificatesSummaryCard(certificates.length),
-                const SizedBox(height: 24),
-
                 // Lista de certificados
                 Expanded(
                   child: Column(
@@ -75,7 +72,7 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
                         'Mis Certificados',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF1E3A8A),
+                          color: AppColors.primary,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -100,63 +97,10 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showEligibleEvents,
-        backgroundColor: const Color(0xFF1E3A8A),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Generar Certificado'),
-      ),
+      floatingActionButton: null,
     );
   }
 
-  Widget _buildCertificatesSummaryCard(int certificateCount) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.card_membership,
-                color: Color(0xFFEF4444),
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Certificados Obtenidos',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$certificateCount certificado${certificateCount != 1 ? 's' : ''}',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFFEF4444),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildCertificateCard(CertificateModel certificate) {
     return Card(
@@ -193,9 +137,9 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
                         FutureBuilder<String>(
                           future: _getEventTitle(certificate.baseEventId),
                           builder: (context, snapshot) {
-                            final title = snapshot.data ?? 'Evento ${certificate.baseEventId}';
+                            final title = snapshot.data ?? 'Programa';
                             return Text(
-                              'Evento: $title',
+                              title,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -227,13 +171,7 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
                   _buildInfoChip(
                     Icons.access_time,
                     '${certificate.hoursCompleted.toStringAsFixed(1)} horas',
-                    Colors.blue,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildInfoChip(
-                    Icons.verified_user,
-                    certificate.certificateId,
-                    Colors.green,
+                    AppColors.primary,
                   ),
                 ],
               ),
@@ -270,38 +208,20 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Expanded(
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.card_membership, size: 80, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              'No tienes certificados disponibles',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Completa las horas requeridas en los eventos para obtener certificados',
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade500),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _showEligibleEvents,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E3A8A),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Ver eventos elegibles'),
-            ),
-          ],
-        ),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.card_membership, size: 80, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Text(
+            'No tienes certificados disponibles',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(color: Colors.grey.shade600),
+          ),
+        ],
       ),
     );
   }
@@ -356,11 +276,7 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildDetailRow(
-                          'Certificado ID',
-                          certificate.certificateId,
-                        ),
-                        _buildDetailRow('Usuario ID', certificate.userId),
+                        _buildDetailRow('Usuario', widget.user.displayName),
                         _buildDetailRow(
                           'Horas completadas',
                           '${certificate.hoursCompleted.toStringAsFixed(1)} horas',
@@ -372,8 +288,8 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
                         FutureBuilder<String>(
                           future: _getEventTitle(certificate.baseEventId),
                           builder: (context, snapshot) {
-                            final title = snapshot.data ?? 'Evento ${certificate.baseEventId}';
-                            return _buildDetailRow('Evento', title);
+                            final title = snapshot.data ?? 'Programa';
+                            return _buildDetailRow('Programa', title);
                           },
                         ),
 
@@ -443,184 +359,6 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
     );
   }
 
-  void _showEligibleEvents() async {
-    try {
-      final eligibleEvents = await CertificateService.getEligibleEventsForUser(
-        widget.user.uid,
-      );
-
-      if (!mounted) return;
-
-      if (eligibleEvents.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'No tienes eventos elegibles para certificado en este momento',
-            ),
-          ),
-        );
-        return;
-      }
-
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (context) => DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          maxChildSize: 0.9,
-          minChildSize: 0.5,
-          expand: false,
-          builder: (context, scrollController) {
-            return Container(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Handle bar
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  Text(
-                    'Eventos Elegibles para Certificado',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  Expanded(
-                    child: ListView.builder(
-                      controller: scrollController,
-                      itemCount: eligibleEvents.length,
-                      itemBuilder: (context, index) {
-                        final eventData = eligibleEvents[index];
-                        final event = eventData['event'] as EventModel;
-                        final userHours = eventData['userHours'] as double;
-                        final requiredHours = eventData['requiredHours'] as int;
-                        final canGenerate = eventData['canGenerate'] as bool;
-                        final hasCertificate =
-                            eventData['hasCertificate'] as bool;
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  event.title,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Horas completadas: ${userHours.toStringAsFixed(1)} / $requiredHours',
-                                  style: TextStyle(color: Colors.grey[600]),
-                                ),
-                                const SizedBox(height: 8),
-                                LinearProgressIndicator(
-                                  value: userHours / requiredHours,
-                                  backgroundColor: Colors.grey[300],
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    userHours >= requiredHours
-                                        ? Colors.green
-                                        : Colors.blue,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                if (hasCertificate)
-                                  const Chip(
-                                    label: Text('Certificado ya obtenido'),
-                                    backgroundColor: Colors.green,
-                                    labelStyle: TextStyle(color: Colors.white),
-                                  )
-                                else if (canGenerate)
-                                  ElevatedButton(
-                                    onPressed: () =>
-                                        _generateCertificate(event, userHours),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    child: const Text('Generar Certificado'),
-                                  )
-                                else
-                                  Chip(
-                                    label: Text(
-                                      'Faltan ${(requiredHours - userHours).toStringAsFixed(1)} horas',
-                                    ),
-                                    backgroundColor: Colors.orange,
-                                    labelStyle: const TextStyle(
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al cargar eventos elegibles: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  void _generateCertificate(EventModel event, double userHours) async {
-    try {
-      await CertificateService.generateCertificate(
-        userId: widget.user.uid,
-        eventId: event.eventId,
-        userName: widget.user.displayName,
-        eventTitle: event.title,
-        totalHours: userHours,
-      );
-
-      if (!mounted) return;
-
-      Navigator.pop(context); // Cerrar modal
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Perfecto! Tu certificado ha sido generado'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al generar certificado: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 
   void _downloadCertificate(CertificateModel certificate) async {
     try {
@@ -654,9 +392,9 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Row(
+              title: const Row(
             children: [
-              Icon(Icons.download_done, color: Colors.green),
+              Icon(Icons.download_done, color: AppColors.success),
               SizedBox(width: 8),
               Text('Descarga completada'),
             ],
@@ -696,7 +434,7 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
         Navigator.of(context).pop(); // Cerrar diálogo de carga si está abierto
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al descargar certificado: $e'),
+            content: const Text('No se pudo descargar el certificado'),
             backgroundColor: Colors.red,
           ),
         );
@@ -781,7 +519,7 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error al compartir certificado: $e'),
+          content: const Text('No se pudo compartir el certificado'),
           backgroundColor: Colors.red,
         ),
       );
@@ -894,9 +632,9 @@ ${widget.user.displayName}
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+          const SnackBar(
         content: Text('Enlace copiado al portapapeles'),
-        backgroundColor: Colors.green,
+        backgroundColor: AppColors.success,
       ),
     );
   }

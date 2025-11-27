@@ -199,6 +199,11 @@ class UserService {
     }
   }
 
+  static Future<int> countUsers() async {
+    final q = await _firestore.collection('users').get();
+    return q.docs.length;
+  }
+
   /// Stream para escuchar cambios en el perfil del usuario
   static Stream<Map<String, dynamic>?> getUserProfileStream(String userId) {
     return _firestore

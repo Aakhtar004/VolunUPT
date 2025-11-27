@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "371362030185-il1qbgvmsh5em7dbccenqd8bjb8s08ke.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.volunupt",
+            "certificate_hash": "88a736f0fd616aaaa7fcce48bb5b043d0d8011be"
+          }
+        },
+        {
           "client_id": "371362030185-bhrs7r2q6npivvm7v5ma420a7n6epmke.apps.googleusercontent.com",
           "client_type": 3
         }

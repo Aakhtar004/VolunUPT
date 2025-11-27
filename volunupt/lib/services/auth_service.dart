@@ -10,7 +10,7 @@ class AuthService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Dominios permitidos
-  static const List<String> _allowedDomains = ['@virtual.upt.pe'];
+  static const List<String> _allowedDomains = ['@virtual.upt.pe', '@gmail.com'];
 
   // Stream del estado de autenticación
   static Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -25,35 +25,36 @@ class AuthService {
   static Future<UserModel?> signInWithGoogle() async {
     try {
       if (kIsWeb) {
-        // Flujo específico para Web: usar popup (o redirect como fallback)
         final provider = GoogleAuthProvider();
         provider.setCustomParameters({'prompt': 'select_account'});
         provider.addScope('email');
 
-        UserCredential userCredential;
         try {
-          userCredential = await _auth.signInWithPopup(provider);
-        } catch (_) {
-          // Fallback si el navegador bloquea popups
-          await _auth.signInWithRedirect(provider);
-          userCredential = await _auth.getRedirectResult();
+          final userCredential = await _auth.signInWithPopup(provider);
+          final User? user = userCredential.user;
+          if (user == null) return null;
+
+          final email = user.email ?? '';
+          final isAllowed = _allowedDomains.any((d) => email.endsWith(d));
+          if (!isAllowed) {
+            await _auth.signOut();
+            throw FirebaseAuthException(
+              code: 'invalid-email-domain',
+              message:
+                  'Solo se permiten cuentas institucionales: @virtual.upt.pe',
+            );
+          }
+
+          return await _createOrUpdateUser(user);
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'popup-blocked' ||
+              e.code == 'popup-closed-by-user' ||
+              e.code == 'web-context-canceled') {
+            await _auth.signInWithRedirect(provider);
+            return null;
+          }
+          rethrow;
         }
-
-        final User? user = userCredential.user;
-        if (user == null) return null;
-
-        // Validar dominio
-        final email = user.email ?? '';
-        final isAllowed = _allowedDomains.any((d) => email.endsWith(d));
-        if (!isAllowed) {
-          await _auth.signOut();
-          throw Exception(
-            'Solo se permiten cuentas institucionales: @virtual.upt.pe',
-          );
-        }
-
-        // Crear/actualizar en Firestore
-        return await _createOrUpdateUser(user);
       } else {
         // Flujo para móviles/escritorio
         await _googleSignIn.signOut(); // Forzar selector de cuenta
@@ -67,8 +68,10 @@ class AuthService {
         );
         if (!isAllowedMobile) {
           await _googleSignIn.signOut();
-          throw Exception(
-            'Solo se permiten cuentas institucionales: @virtual.upt.pe',
+          throw FirebaseAuthException(
+            code: 'invalid-email-domain',
+            message:
+                'Solo se permiten cuentas institucionales: @virtual.upt.pe',
           );
         }
 
@@ -162,7 +165,16 @@ class AuthService {
   /// Cerrar sesión
   static Future<void> signOut() async {
     try {
-      await Future.wait([_auth.signOut(), _googleSignIn.signOut()]);
+      await _auth.signOut();
+
+      if (!kIsWeb) {
+        try {
+          await _googleSignIn.signOut();
+          await _googleSignIn.disconnect();
+        } catch (_) {
+          // Ignorar errores del plugin de GoogleSignIn en plataformas no web
+        }
+      }
     } catch (e) {
       rethrow;
     }

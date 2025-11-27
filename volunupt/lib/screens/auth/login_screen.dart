@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_service.dart';
 import '../home/home_screen.dart';
+import '../../utils/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,8 +17,10 @@ class _LoginScreenState extends State<LoginScreen>
     with TickerProviderStateMixin {
   bool _isLoading = false;
   late AnimationController _animationController;
+  late AnimationController _floatingController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  late Animation<double> _floatingAnimation;
 
   @override
   void initState() {
@@ -26,21 +30,33 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _initializeAnimations() {
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1400),
       vsync: this,
     );
 
+    _floatingController = AnimationController(
+      duration: const Duration(milliseconds: 2500),
+      vsync: this,
+    )..repeat(reverse: true);
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+      ),
     );
 
     _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+        Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero).animate(
           CurvedAnimation(
             parent: _animationController,
-            curve: Curves.easeOutCubic,
+            curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
           ),
         );
+
+    _floatingAnimation = Tween<double>(begin: -8, end: 8).animate(
+      CurvedAnimation(parent: _floatingController, curve: Curves.easeInOut),
+    );
 
     _animationController.forward();
   }
@@ -56,7 +72,6 @@ class _LoginScreenState extends State<LoginScreen>
       final userModel = await AuthService.signInWithGoogle();
 
       if (userModel != null && mounted) {
-        // Inicializar servicio de sesiones
         SessionService.initialize(
           onSessionExpired: () {
             if (mounted) {
@@ -70,12 +85,11 @@ class _LoginScreenState extends State<LoginScreen>
           },
         );
 
-        // Navegar a la pantalla principal
         _navigateToHome();
       }
     } catch (e) {
       if (mounted) {
-        _showErrorDialog(_getErrorMessage(e.toString()));
+        _showErrorDialog(_getErrorMessage(e));
       }
     } finally {
       if (mounted) {
@@ -86,27 +100,45 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  String _getErrorMessage(String error) {
-    if (error.contains('Solo se permiten cuentas institucionales')) {
-      return 'Solo se permiten cuentas institucionales: @virtual.upt.pe.\nPor favor, usa tu correo institucional.';
-    } else if (error.contains('network')) {
-      return 'Error de conexión. Verifica tu conexión a internet.';
-    } else if (error.contains('cancelled')) {
-      return 'Inicio de sesión cancelado.';
-    } else {
-      return 'No pudimos iniciar sesión. Por favor, inténtalo de nuevo.';
+  String _getErrorMessage(Object error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'invalid-email-domain':
+          return 'Solo se permiten cuentas institucionales: @virtual.upt.pe.\nPor favor, usa tu correo institucional.';
+        case 'network-request-failed':
+          return 'Error de conexión. Verifica tu conexión a internet.';
+        case 'popup-closed-by-user':
+          return 'Inicio de sesión cancelado.';
+        default:
+          return 'No pudimos iniciar sesión. Por favor, inténtalo de nuevo.';
+      }
     }
+
+    final msg = error.toString().toLowerCase();
+    if (msg.contains('solo se permiten cuentas institucionales') ||
+        msg.contains('solo se permiten cuentas')) {
+      return 'Solo se permiten cuentas institucionales: @virtual.upt.pe.\nPor favor, usa tu correo institucional.';
+    }
+    if (msg.contains('network')) {
+      return 'Error de conexión. Verifica tu conexión a internet.';
+    }
+    if (msg.contains('popup_closed_by_user') || msg.contains('cancelled')) {
+      return 'Inicio de sesión cancelado.';
+    }
+    return 'No pudimos iniciar sesión. Por favor, inténtalo de nuevo.';
   }
 
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Error de autenticación'),
         content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
             child: const Text('Entendido'),
           ),
         ],
@@ -119,6 +151,7 @@ class _LoginScreenState extends State<LoginScreen>
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Sesión por expirar'),
         content: const Text(
           'Tu sesión expirará pronto por inactividad. ¿Deseas continuar?',
@@ -136,6 +169,7 @@ class _LoginScreenState extends State<LoginScreen>
               Navigator.of(context).pop();
               SessionService.extendSession();
             },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text('Continuar'),
           ),
         ],
@@ -172,201 +206,306 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _animationController.dispose();
+    _floatingController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1E3A8A), // Azul UPT
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Logo y título
-                  Column(
-                    children: [
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.primary,
+              AppColors.primary.withValues(alpha: 0.85),
+              const Color(0xFF1e40af),
+            ],
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Decorative circles
+            Positioned(
+              top: -100,
+              right: -100,
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -150,
+              left: -150,
+              child: Container(
+                width: 400,
+                height: 400,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.03),
+                ),
+              ),
+            ),
+            Positioned(
+              top: size.height * 0.2,
+              right: -80,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.04),
+                ),
+              ),
+            ),
+
+            // Main content
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: SlideTransition(
+                      position: _slideAnimation,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Logo con animación flotante
+                          AnimatedBuilder(
+                            animation: _floatingAnimation,
+                            builder: (context, child) {
+                              return Transform.translate(
+                                offset: Offset(0, _floatingAnimation.value),
+                                child: child,
+                              );
+                            },
+                            child: Container(
+                              width: 110,
+                              height: 110,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(28),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 30,
+                                    offset: const Offset(0, 15),
+                                    spreadRadius: -5,
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.volunteer_activism,
+                                size: 56,
+                                color: AppColors.primary,
+                              ),
                             ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.volunteer_activism,
-                          size: 50,
-                          color: Color(0xFF1E3A8A),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      const Text(
-                        'VolunUPT',
-                        style: TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Sistema de Voluntariado UPT',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white.withValues(alpha: 0.8),
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ],
-                  ),
+                          ),
 
-                  const SizedBox(height: 80),
+                          const SizedBox(height: 40),
 
-                  // Mensaje de bienvenida
-                  Text(
-                    'Bienvenido',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: 0.9),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Inicia sesión con tu cuenta institucional @upt.pe',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withValues(alpha: 0.7),
-                    ),
-                  ),
+                          // Título
+                          ShaderMask(
+                            shaderCallback: (bounds) => LinearGradient(
+                              colors: [
+                                Colors.white,
+                                Colors.white.withValues(alpha: 0.9),
+                              ],
+                            ).createShader(bounds),
+                            child: const Text(
+                              'VolunUPT',
+                              style: TextStyle(
+                                fontSize: 42,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
 
-                  const SizedBox(height: 48),
+                          const SizedBox(height: 8),
 
-                  // Botón de Google Sign-In
-                  Container(
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: _isLoading ? null : _signInWithGoogle,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (_isLoading) ...[
-                                const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Color(0xFF1E3A8A),
+                          Text(
+                            'Sistema de Voluntariado',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.85),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+
+                          const SizedBox(height: 70),
+
+                          // Card de login
+                          Container(
+                            constraints: const BoxConstraints(maxWidth: 400),
+                            padding: const EdgeInsets.all(32),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 40,
+                                  offset: const Offset(0, 20),
+                                  spreadRadius: -10,
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  '¡Bienvenido!',
+                                  style: TextStyle(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                Text(
+                                  'Inicia sesión con tu cuenta institucional',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                    height: 1.5,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 32),
+
+                                // Botón de Google
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: _isLoading
+                                        ? null
+                                        : _signInWithGoogle,
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Container(
+                                      height: 56,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: Colors.grey[300]!,
+                                          width: 1.5,
+                                        ),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          if (_isLoading) ...[
+                                            SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                      Color
+                                                    >(AppColors.primary),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 14),
+                                            Text(
+                                              'Iniciando sesión...',
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.primary,
+                                              ),
+                                            ),
+                                          ] else ...[
+                                            SvgPicture.asset(
+                                              'assets/images/google_logo.svg',
+                                              width: 22,
+                                              height: 22,
+                                            ),
+                                            const SizedBox(width: 14),
+                                            Text(
+                                              'Continuar con Google',
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.grey[800],
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Iniciando sesión...',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1E3A8A),
+
+                                const SizedBox(height: 24),
+
+                                // Info adicional
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue[50],
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                ),
-                              ] else ...[
-                                SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: SvgPicture.asset(
-                                    'assets/images/google_logo.svg',
-                                    width: 24,
-                                    height: 24,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Continuar con Google',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1E3A8A),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.info_outline,
+                                        color: AppColors.primary,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'Solo cuentas @virtual.upt.pe',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
-                            ],
+                            ),
                           ),
-                        ),
+
+                          const SizedBox(height: 32),
+
+                          // Footer
+                          Text(
+                            'Universidad Privada de Tacna',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 32),
-
-                  // Información adicional
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          color: Colors.white.withValues(alpha: 0.8),
-                          size: 20,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Solo estudiantes, coordinadores y administradores con correo @virtual.upt.pe pueden acceder al sistema.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.8),
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
