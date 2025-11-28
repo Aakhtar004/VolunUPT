@@ -385,10 +385,11 @@ class _MyRegistrationsScreenState extends State<MyRegistrationsScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${registrations.length} ${registrations.length == 1 ? 'actividad inscrita' : 'actividades inscritas'}',
+                          '${registrations.where((r) => r.subEvent != null).length} ${registrations.where((r) => r.subEvent != null).length == 1 ? 'actividad inscrita' : 'actividades inscritas'}',
                           style: TextStyle(
                             fontSize: 13,
                             color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -600,91 +601,129 @@ class _MyRegistrationsScreenState extends State<MyRegistrationsScreen> {
         maxChildSize: 0.95,
         minChildSize: 0.5,
         builder: (context, scrollController) {
-          return Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              children: [
-                // Handle
-                Container(
-                  margin: const EdgeInsets.only(top: 12, bottom: 8),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
+          return StatefulBuilder(
+            builder: (context, setStateModal) {
+              // Verificar si alguna actividad ya inició
+              bool hasStarted = false;
+              final now = DateTime.now();
+              for (final reg in eventGroup.registrations) {
+                if (reg.subEvent != null && reg.subEvent!.startTime.isBefore(now)) {
+                  hasStarted = true;
+                  break;
+                }
+              }
 
-                // Header
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.event_note_rounded,
-                          color: AppColors.primary,
-                          size: 24,
-                        ),
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: Column(
+                  children: [
+                    // Handle
+                    Container(
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              eventGroup.event.title,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
+                    ),
+
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.event_note_rounded,
+                              color: AppColors.primary,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  eventGroup.event.title,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  '${eventGroup.registrations.where((r) => r.subEvent != null).length} ${eventGroup.registrations.where((r) => r.subEvent != null).length == 1 ? 'actividad' : 'actividades'}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close),
+                            color: AppColors.textSecondary,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const Divider(height: 1),
+
+                    // Lista de subeventos
+                    Expanded(
+                      child: ListView.separated(
+                        controller: scrollController,
+                        padding: const EdgeInsets.all(20),
+                        itemCount: eventGroup.registrations.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final regWithSubEvent = eventGroup.registrations[index];
+                          return _buildSubEventCard(regWithSubEvent);
+                        },
+                      ),
+                    ),
+                    
+                    // Botón de cancelar inscripción al programa
+                    if (!hasStarted)
+                      SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _showUnregisterEventDialog(context, eventGroup.event),
+                              icon: const Icon(Icons.cancel_outlined),
+                              label: const Text('Cancelar inscripción al programa'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.error,
+                                side: const BorderSide(color: AppColors.error),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
-                            Text(
-                              '${eventGroup.registrations.length} ${eventGroup.registrations.length == 1 ? 'actividad' : 'actividades'}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                        color: AppColors.textSecondary,
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-
-                const Divider(height: 1),
-
-                // Lista de subeventos
-                Expanded(
-                  child: ListView.separated(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(20),
-                    itemCount: eventGroup.registrations.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final regWithSubEvent = eventGroup.registrations[index];
-                      return _buildSubEventCard(regWithSubEvent);
-                    },
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
@@ -713,7 +752,7 @@ class _MyRegistrationsScreenState extends State<MyRegistrationsScreen> {
     }
 
     final now = DateTime.now();
-    final isUpcoming = subEvent.startTime.isAfter(now);
+    // final isUpcoming = subEvent.startTime.isAfter(now);
     final isActive =
         now.isAfter(subEvent.startTime) && now.isBefore(subEvent.endTime);
     final isCompleted = subEvent.endTime.isBefore(now);
@@ -859,22 +898,6 @@ class _MyRegistrationsScreenState extends State<MyRegistrationsScreen> {
                   'Inscrito: ${_formatDate(registration.registeredAt)}',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 ),
-                if (isUpcoming)
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showUnregisterDialog(regWithSubEvent);
-                    },
-                    icon: const Icon(Icons.cancel_rounded, size: 16),
-                    label: const Text('Cancelar'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ],
@@ -883,78 +906,90 @@ class _MyRegistrationsScreenState extends State<MyRegistrationsScreen> {
     );
   }
 
-  void _showUnregisterDialog(RegistrationWithSubEvent regWithSubEvent) {
-    final subEvent = regWithSubEvent.subEvent;
-
+  void _showUnregisterEventDialog(BuildContext context, EventModel event) {
+    bool isCancelling = false;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Cancelar inscripción',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          '¿Estás seguro de que quieres cancelar tu inscripción a "${subEvent?.title ?? 'esta actividad'}"?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Volver'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _unregisterFromSubEvent(regWithSubEvent.registration);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text(
+              'Cancelar inscripción',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            child: const Text('Confirmar'),
-          ),
-        ],
+            content: Text(
+              '¿Estás seguro de que quieres cancelar tu inscripción al programa "${event.title}"? Esto eliminará tu registro de todas las actividades.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: isCancelling ? null : () => Navigator.pop(context),
+                child: const Text('Volver'),
+              ),
+              ElevatedButton(
+                onPressed: isCancelling ? null : () async {
+                  setStateDialog(() => isCancelling = true);
+                  try {
+                    await EventService.unregisterUserFromEvent(
+                      userId: widget.user.uid,
+                      baseEventId: event.eventId,
+                    );
+                    
+                    if (context.mounted) {
+                      Navigator.pop(context); // Close dialog
+                      Navigator.pop(context); // Close modal
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Inscripción cancelada exitosamente'),
+                          backgroundColor: AppColors.success,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      setStateDialog(() => isCancelling = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error: ${e.toString().replaceAll("Exception: ", "")}'),
+                          backgroundColor: AppColors.error,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: isCancelling 
+                  ? const SizedBox(
+                      width: 16, 
+                      height: 16, 
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
+                    )
+                  : const Text('Confirmar'),
+              ),
+            ],
+          );
+        }
       ),
     );
   }
 
-  Future<void> _unregisterFromSubEvent(RegistrationModel registration) async {
-    try {
-      await EventService.unregisterUserFromSubEvent(
-        userId: widget.user.uid,
-        subEventId: registration.subEventId,
-      );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Inscripción cancelada exitosamente'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('No se pudo cancelar la inscripción'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-      }
-    }
-  }
 
   String _formatDate(DateTime date) {
     final months = [

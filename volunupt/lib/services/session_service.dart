@@ -103,21 +103,29 @@ class SessionService {
     _inactivityTimer = null;
     _sessionCheckTimer = null;
   }
-  
+
   /// Pausar monitoreo (cuando la app va a background)
   static void pause() {
     _inactivityTimer?.cancel();
     _sessionCheckTimer?.cancel();
   }
-  
+
   /// Reanudar monitoreo (cuando la app vuelve a foreground)
   static void resume() {
     if (AuthService.isAuthenticated) {
       _startSessionMonitoring();
-      _resetInactivityTimer();
+      
+      // Verificar si expiró durante el tiempo en background
+      final timeSinceLastActivity = DateTime.now().difference(_lastActivity);
+      if (timeSinceLastActivity.inMinutes >= _inactivityTimeoutMinutes) {
+        _handleSessionExpired();
+      } else {
+        // Si no ha expirado, reiniciar el timer con el tiempo restante
+        _resetInactivityTimer();
+      }
     }
   }
-  
+
   /// Cerrar sesión manualmente
   static Future<void> logout() async {
     await AuthService.signOut();

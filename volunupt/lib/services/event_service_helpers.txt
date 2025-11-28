@@ -1,0 +1,104 @@
+// Métodos helper para agregar al EventService
+
+  // Calcular horas totales de un evento sumando las horas de todas sus actividades
+  static Future<double> calculateTotalHours(String baseEventId) async {
+    try {
+      final subEventsQuery = await _firestore
+          .collection(_subEventsCollection)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .get();
+      
+      double totalHours = 0.0;
+      for (final doc in subEventsQuery.docs) {
+        final subEvent = SubEventModel.fromSnapshot(doc);
+        final duration = subEvent.endTime.difference(subEvent.startTime);
+        totalHours += duration.inMinutes / 60.0;
+      }
+      
+      return totalHours;
+    } catch (e) {
+      return 0.0;
+    }
+  }
+
+  // Verificar si un usuario es elegible para certificado
+  // (debe haber completado todas las actividades del evento)
+  static Future<bool> isEligibleForCertificate({
+    required String userId,
+    required String baseEventId,
+  }) async {
+    try {
+      // Obtener todas las actividades del evento
+      final subEventsQuery = await _firestore
+          .collection(_subEventsCollection)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .get();
+      
+      if (subEventsQuery.docs.isEmpty) {
+        return false; // No hay actividades
+      }
+
+      // Obtener registros de asistencia validados del usuario para este evento
+      final attendanceQuery = await _firestore
+          .collection('attendanceRecords')
+          .where('userId', isEqualTo: userId)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .where('status', isEqualTo: AttendanceStatus.validated.toString().split('.').last)
+          .get();
+      
+      final validatedSubEventIds = attendanceQuery.docs
+          .map((doc) => (doc.data())['subEventId'] as String)
+          .toSet();
+
+      // Verificar que tenga asistencia validada en todas las actividades
+      for (final doc in subEventsQuery.docs) {
+        if (!validatedSubEventIds.contains(doc.id)) {
+          return false; // Falta asistencia en al menos una actividad
+        }
+      }
+
+      return true; // Completó todas las actividades
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Calcular horas completadas por un usuario en un evento específico
+  static Future<double> calculateCompletedHours({
+    required String userId,
+    required String baseEventId,
+  }) async {
+    try {
+      // Obtener registros de asistencia validados del usuario
+      final attendanceQuery = await _firestore
+          .collection('attendanceRecords')
+          .where('userId', isEqualTo: userId)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .where('status', isEqualTo: AttendanceStatus.validated.toString().split('.').last)
+          .get();
+      
+      double totalHours = 0.0;
+      for (final doc in attendanceQuery.docs) {
+        final subEventId = (doc.data())['subEventId'] as String;
+        final subEventDoc = await _firestore
+            .collection(_subEventsCollection)
+            .doc(subEventId)
+            .get();
+        
+        if (subEventDoc.exists) {
+          final subEvent = SubEventModel.fromSnapshot(subEventDoc);
+          final duration = subEvent.endTime.difference(subEvent.startTime);
+          totalHours += duration.inMinutes / 60.0;
+        }
+      }
+      
+      return totalHours;
+    } catch (e) {
+      return 0.0;
+    }
+  }
+
+  // Helper para formatear fechas
+  static String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }

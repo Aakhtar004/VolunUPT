@@ -171,7 +171,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       _statCard('Usuarios', _totalUsers.toString(), Icons.people, AppColors.primary),
                       _statCard('Estudiantes', _students.toString(), Icons.school, AppColors.success),
                       _statCard('Coordinadores', _coordinators.toString(), Icons.supervisor_account, AppColors.accent),
-                      _statCard('Administradores', _admins.toString(), Icons.admin_panel_settings, const Color(0xFF6366F1)),
+                      _statCard('Administradores', _admins.toString(), Image.asset('assets/images/logop.png'), const Color(0xFF6366F1)),
                       _statCard('Validaciones Pendientes', _pendingValidations.toString(), Icons.pending_actions, const Color(0xFFF59E0B)),
                     ],
                   ),
@@ -480,7 +480,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   children: [
                     _statCard('Estudiantes', _students.toString(), Icons.school, AppColors.success),
                     _statCard('Coordinadores', _coordinators.toString(), Icons.supervisor_account, AppColors.accent),
-                    _statCard('Administradores', _admins.toString(), Icons.admin_panel_settings, const Color(0xFF6366F1)),
+                    _statCard('Administradores', _admins.toString(), Image.asset('assets/images/logop.png'), const Color(0xFF6366F1)),
                   ],
                 ),
           const SizedBox(height: 24),
@@ -564,7 +564,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _statCard(String title, String value, IconData icon, Color color) {
+  Widget _statCard(String title, String value, dynamic icon, Color color) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -582,7 +582,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     color: color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icon, color: color, size: 20),
+                  child: icon is IconData 
+                      ? Icon(icon, color: color, size: 20)
+                      : SizedBox(width: 20, height: 20, child: icon),
                 ),
                 const Spacer(),
                 Text(
@@ -678,9 +680,38 @@ class AdminRouteGuard extends StatelessWidget {
     return FutureBuilder<UserModel?>(
       future: AuthService.getCurrentUserData(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
+        if (!snapshot.hasData || snapshot.data == null) {
+          return Scaffold(
+            appBar: AppBar(
+              backgroundColor: AppColors.primary,
+              title: const Text('Error', style: TextStyle(color: Colors.white)),
+              iconTheme: const IconThemeData(color: Colors.white),
+            ),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+                  const SizedBox(height: 12),
+                  const Text('No se pudo cargar la información del usuario.'),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Volver al inicio'),
+                  ),
+                ],
+              ),
+            ),
           );
         }
         final user = snapshot.data!;

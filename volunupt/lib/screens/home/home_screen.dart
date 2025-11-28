@@ -588,13 +588,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (isStudent) {
       actions.addAll([
+        // {
+        //   'title': 'Actividades',
+        //   'icon': Icons.event_rounded,
+        //   'color': AppColors.primary,
+        //   'onTap': () => Navigator.push(
+        //     context,
+        //     MaterialPageRoute(builder: (context) => const EventsScreen()),
+        //   ),
+        // },
         {
-          'title': 'Actividades',
-          'icon': Icons.event_rounded,
+          'title': 'Certificados',
+          'icon': Icons.workspace_premium_rounded,
           'color': AppColors.primary,
           'onTap': () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const EventsScreen()),
+            MaterialPageRoute(
+              builder: (context) => CertificatesScreen(user: _user!),
+            ),
           ),
         },
         {

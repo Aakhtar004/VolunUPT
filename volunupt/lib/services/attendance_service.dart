@@ -134,6 +134,17 @@ class AttendanceService {
     return q.docs.length;
   }
 
+  // Obtener registros de asistencia de un subevento
+  static Stream<List<AttendanceRecordModel>> getSubEventAttendance(String subEventId) {
+    return _firestore
+        .collection(_attendanceRecordsCollection)
+        .where('subEventId', isEqualTo: subEventId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => AttendanceRecordModel.fromSnapshot(doc))
+            .toList());
+  }
+
   // Verificar si un usuario está inscrito en un subevento
   static Future<bool> _isUserRegisteredForSubEvent(String userId, String subEventId) async {
     try {
@@ -884,13 +895,16 @@ class AttendanceService {
           existingHours += record.hoursEarned;
         }
 
+        // Calcular horas requeridas dinámicamente
+        final requiredHours = await EventService.calculateTotalHours(eventId);
+
         // Si ya tiene las horas requeridas o más, saltar
-        if (existingHours >= event.totalHoursForCertificate) {
+        if (existingHours >= requiredHours) {
           continue;
         }
 
         // Calcular horas que faltan
-        final hoursNeeded = event.totalHoursForCertificate - existingHours;
+        final hoursNeeded = requiredHours - existingHours;
 
         // Buscar actividades que no tengan registro de asistencia
         for (final subEvent in subEvents) {

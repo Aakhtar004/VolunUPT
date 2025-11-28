@@ -780,8 +780,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       // Contar estudiantes elegibles para certificados
       int pendingCertificates = 0;
       for (final event in eventsQuery.docs) {
-        final eventData = event.data();
-        final requiredHours = (eventData['totalHoursForCertificate'] ?? 0).toDouble();
+        final eventId = event.id;
+        // Calcular horas requeridas dinámicamente
+        final requiredHours = await EventService.calculateTotalHours(eventId);
         if (requiredHours <= 0) continue;
         
         // Obtener registros del evento

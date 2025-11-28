@@ -537,6 +537,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
 
                       const SizedBox(height: 20),
+                      
+                      // Botón de Cerrar Sesión
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _isLoading ? null : () async {
+                            final navigator = Navigator.of(context);
+                            setState(() => _isLoading = true);
+                            try {
+                              await AuthService.signOut();
+                              navigator.pushNamedAndRemoveUntil('/', (route) => false);
+                            } catch (e) {
+                              if (!mounted) return;
+                              setState(() => _isLoading = false);
+                              _showErrorSnackBar('Error al cerrar sesión');
+                            }
+                          },
+                          icon: _isLoading 
+                            ? const SizedBox(
+                                width: 20, 
+                                height: 20, 
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2, 
+                                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.error),
+                                )
+                              )
+                            : const Icon(Icons.logout_rounded),
+                          label: Text(_isLoading ? 'Cerrando sesión...' : 'Cerrar Sesión'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.error.withValues(alpha: 0.1),
+                            foregroundColor: AppColors.error,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -579,13 +620,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
             child: CircleAvatar(
-              radius: 50,
+              radius: 35,
               backgroundImage: widget.user.photoURL.isNotEmpty
                   ? NetworkImage(widget.user.photoURL)
                   : null,
               backgroundColor: Colors.white,
               child: widget.user.photoURL.isEmpty
-                  ? const Icon(Icons.person, size: 50, color: AppColors.primary)
+                  ? Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Image.asset('assets/images/logop.png'),
+                    )
                   : null,
             ),
           ),

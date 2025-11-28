@@ -313,20 +313,46 @@ class EventService {
     required String baseEventId,
   }) async {
     try {
-      // Bloquear cancelación si el evento ya inició
+      // Bloquear cancelación si el evento ya inició (alguna actividad empezó)
       final started = await hasEventStarted(baseEventId);
       if (started) {
-        throw Exception('No se puede cancelar una inscripción del programa iniciado');
+        throw Exception('No se puede cancelar la inscripción porque el programa ya inició');
       }
+
+      final batch = _firestore.batch();
+
+      // 1. Obtener todas las inscripciones del usuario a este evento
       final query = await _firestore
           .collection(_registrationsCollection)
           .where('userId', isEqualTo: userId)
           .where('baseEventId', isEqualTo: baseEventId)
-          .where('subEventId', isEqualTo: '')
           .get();
+
+      if (query.docs.isEmpty) return;
+
+      // 2. Para cada inscripción, si es de un subevento, decrementar contador
       for (final doc in query.docs) {
-        await doc.reference.delete();
+        final data = doc.data();
+        final subEventId = data['subEventId'] as String?;
+
+        if (subEventId != null && subEventId.isNotEmpty) {
+          final subEventRef = _firestore.collection(_subEventsCollection).doc(subEventId);
+          batch.update(subEventRef, {
+            'registeredCount': FieldValue.increment(-1),
+          });
+        }
+        
+        // Eliminar la inscripción
+        batch.delete(doc.reference);
       }
+
+      // 3. Decrementar contador del evento principal
+      final eventRef = _firestore.collection(_eventsCollection).doc(baseEventId);
+      batch.update(eventRef, {
+        'registeredCount': FieldValue.increment(-1),
+      });
+
+      await batch.commit();
     } catch (e) {
       throw Exception('Error al cancelar inscripción al programa: $e');
     }
@@ -402,6 +428,8 @@ class EventService {
           return list;
         });
   }
+
+
   // Obtener inscripciones del programa (evento base)
   static Stream<List<RegistrationModel>> getEventRegistrations(String baseEventId) {
     return _firestore
@@ -458,7 +486,8 @@ class EventService {
     required String title,
     required String description,
     required String coordinatorId,
-    required double totalHoursForCertificate,
+    required DateTime startDate,
+    required DateTime endDate,
     String? imageUrl,
     SessionType sessionType = SessionType.multiple,
     // Datos opcionales para crear automáticamente la primera actividad
@@ -469,8 +498,14 @@ class EventService {
     double? singleSessionLatitude,
     double? singleSessionLongitude,
     int? singleSessionMaxVolunteers,
+    int maxVolunteers = 0,
   }) async {
     try {
+      // Validar que endDate sea después de startDate
+      if (endDate.isBefore(startDate)) {
+        throw Exception('La fecha de fin debe ser posterior a la fecha de inicio');
+      }
+
       final event = EventModel(
         eventId: '', // Se asignará automáticamente
         title: title,
@@ -478,13 +513,15 @@ class EventService {
         imageUrl: imageUrl ?? '',
         coordinatorId: coordinatorId,
         status: EventStatus.borrador,
-        totalHoursForCertificate: totalHoursForCertificate,
+        startDate: startDate,
+        endDate: endDate,
         sessionType: sessionType,
+        maxVolunteers: maxVolunteers,
       );
 
       final docRef = await _firestore
           .collection(_eventsCollection)
-          .add(event.toMap());
+          .add(event.toJson());
 
       // Si el programa es de una sola sesión, crear automáticamente la primera actividad
       if (sessionType == SessionType.unica) {
@@ -492,8 +529,7 @@ class EventService {
         if (singleSessionDate == null ||
             singleSessionStartTime == null ||
             singleSessionEndTime == null ||
-            (singleSessionLocation == null || singleSessionLocation.trim().isEmpty) ||
-            (singleSessionMaxVolunteers == null || singleSessionMaxVolunteers <= 0)) {
+            (singleSessionLocation == null || singleSessionLocation.trim().isEmpty)) {
           // Si faltan datos, eliminar el programa recién creado para evitar registros incompletos
           try {
             await _firestore.collection(_eventsCollection).doc(docRef.id).delete();
@@ -510,7 +546,7 @@ class EventService {
           location: singleSessionLocation,
           latitude: singleSessionLatitude,
           longitude: singleSessionLongitude,
-          maxVolunteers: singleSessionMaxVolunteers,
+          maxVolunteers: singleSessionMaxVolunteers ?? 0,
         );
       }
 
@@ -533,6 +569,14 @@ class EventService {
     required int maxVolunteers,
   }) async {
     try {
+      // Validar que la actividad esté dentro del rango de fechas del evento
+      final event = await getEventById(baseEventId);
+      if (event != null) {
+        if (date.isBefore(event.startDate) || date.isAfter(event.endDate)) {
+          throw Exception('La actividad debe estar dentro del rango de fechas del programa (${_formatDate(event.startDate)} - ${_formatDate(event.endDate)})');
+        }
+      }
+
       final subEvent = SubEventModel(
         subEventId: '', // Se asignará automáticamente
         baseEventId: baseEventId,
@@ -596,8 +640,10 @@ class EventService {
     required String title,
     required String description,
     String? imageUrl,
-    double? totalHoursForCertificate,
+    DateTime? startDate,
+    DateTime? endDate,
     EventStatus? status,
+    int? maxVolunteers,
   }) async {
     try {
       final Map<String, dynamic> data = {
@@ -606,11 +652,21 @@ class EventService {
       };
 
       if (imageUrl != null) data['imageUrl'] = imageUrl;
-      if (totalHoursForCertificate != null) {
-        data['totalHoursForCertificate'] = totalHoursForCertificate;
+      if (startDate != null) {
+        data['startDate'] = Timestamp.fromDate(startDate);
+      }
+      if (endDate != null) {
+        // Validar que endDate sea después de startDate si ambos están presentes
+        if (startDate != null && endDate.isBefore(startDate)) {
+          throw Exception('La fecha de fin debe ser posterior a la fecha de inicio');
+        }
+        data['endDate'] = Timestamp.fromDate(endDate);
       }
       if (status != null) {
         data['status'] = status.toString().split('.').last;
+      }
+      if (maxVolunteers != null) {
+        data['maxVolunteers'] = maxVolunteers;
       }
 
       await _firestore.collection(_eventsCollection).doc(eventId).update(data);
@@ -785,4 +841,96 @@ class EventService {
     }
     return total;
   }
+  // Calcular horas totales de un evento sumando las horas de todas sus actividades
+  static Future<double> calculateTotalHours(String baseEventId) async {
+    try {
+      final subEventsQuery = await _firestore
+          .collection(_subEventsCollection)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .get();
+      
+      double totalHours = 0.0;
+      for (final doc in subEventsQuery.docs) {
+        final subEvent = SubEventModel.fromSnapshot(doc);
+        final duration = subEvent.endTime.difference(subEvent.startTime);
+        totalHours += duration.inMinutes / 60.0;
+      }
+      
+      return totalHours;
+    } catch (e) {
+      return 0.0;
+    }
+  }
+
+  // Verificar si un usuario es elegible para certificado
+  static Future<bool> isEligibleForCertificate({
+    required String userId,
+    required String baseEventId,
+  }) async {
+    try {
+      final subEventsQuery = await _firestore
+          .collection(_subEventsCollection)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .get();
+      
+      if (subEventsQuery.docs.isEmpty) return false;
+
+      final attendanceQuery = await _firestore
+          .collection('attendanceRecords')
+          .where('userId', isEqualTo: userId)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .where('status', isEqualTo: AttendanceStatus.validated.toString().split('.').last)
+          .get();
+      
+      final validatedSubEventIds = attendanceQuery.docs
+          .map((doc) => (doc.data())['subEventId'] as String)
+          .toSet();
+
+      for (final doc in subEventsQuery.docs) {
+        if (!validatedSubEventIds.contains(doc.id)) return false;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Calcular horas completadas por un usuario
+  static Future<double> calculateCompletedHours({
+    required String userId,
+    required String baseEventId,
+  }) async {
+    try {
+      final attendanceQuery = await _firestore
+          .collection('attendanceRecords')
+          .where('userId', isEqualTo: userId)
+          .where('baseEventId', isEqualTo: baseEventId)
+          .where('status', isEqualTo: AttendanceStatus.validated.toString().split('.').last)
+          .get();
+      
+      double totalHours = 0.0;
+      for (final doc in attendanceQuery.docs) {
+        final subEventId = (doc.data())['subEventId'] as String;
+        final subEventDoc = await _firestore
+            .collection(_subEventsCollection)
+            .doc(subEventId)
+            .get();
+        
+        if (subEventDoc.exists) {
+          final subEvent = SubEventModel.fromSnapshot(subEventDoc);
+          final duration = subEvent.endTime.difference(subEvent.startTime);
+          totalHours += duration.inMinutes / 60.0;
+        }
+      }
+      return totalHours;
+    } catch (e) {
+      return 0.0;
+    }
+  }
+
+  // Helper para formatear fechas
+  static String _formatDate(DateTime date) {
+    return '//';
+  }
+
 }

@@ -264,10 +264,10 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
               ],
               Row(
                 children: [
-                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                  Icon(Icons.date_range, size: 16, color: Colors.grey[600]),
                   const SizedBox(width: 4),
                   Text(
-                    '${event.totalHoursForCertificate} horas para certificado',
+                    '${DateFormat('dd/MM').format(event.startDate)} - ${DateFormat('dd/MM').format(event.endDate)}',
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                   const SizedBox(width: 16),
@@ -502,11 +502,13 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
     final formKey = GlobalKey<FormState>();
     final titleController = TextEditingController();
     final descriptionController = TextEditingController();
-    final hoursController = TextEditingController(text: '10');
+    DateTime? programStartDate;
+    DateTime? programEndDate;
+    final eventMaxVolController = TextEditingController(text: '100');
 
     // Campos para sesión única
     final locationController = TextEditingController();
-    final maxVolController = TextEditingController(text: '30');
+    final maxVolController = TextEditingController(text: '');
     DateTime? singleDate;
     TimeOfDay? singleStart;
     TimeOfDay? singleEnd;
@@ -600,26 +602,89 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                       prefixIcon: Icon(Icons.description),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: hoursController,
-                    decoration: const InputDecoration(
-                      labelText: 'Horas para certificado',
-                      hintText: 'Ej. 20',
-                      prefixIcon: Icon(Icons.schedule),
-                      helperText:
-                          'Horas totales del programa que contarán para el certificado',
+                  const SizedBox(height: 16),
+                  // Fechas del programa
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Fechas del programa',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade800,
+                      ),
                     ),
-                    keyboardType: TextInputType.number,
-                    validator: (v) {
-                      final value = double.tryParse(v ?? '');
-                      if (value == null || value <= 0) {
-                        return 'Ingresa horas válidas (>0)';
-                      }
-                      return null;
-                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.now(),
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                            );
+                            if (picked != null) {
+                              setStateDialog(() => programStartDate = picked);
+                            }
+                          },
+                          icon: const Icon(Icons.calendar_today),
+                          label: Text(
+                            programStartDate == null
+                                ? 'Fecha inicio'
+                                : DateFormat('dd/MM/yyyy').format(programStartDate!),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: programStartDate ?? DateTime.now(),
+                              firstDate: programStartDate ?? DateTime.now(),
+                              lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                            );
+                            if (picked != null) {
+                              setStateDialog(() => programEndDate = picked);
+                            }
+                          },
+                          icon: const Icon(Icons.calendar_today),
+                          label: Text(
+                            programEndDate == null
+                                ? 'Fecha fin'
+                                : DateFormat('dd/MM/yyyy').format(programEndDate!),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
+                  if (!isSingleSession) ...[
+                    TextFormField(
+                      controller: eventMaxVolController,
+                      decoration: const InputDecoration(
+                        labelText: 'Cupos del programa',
+                        hintText: 'Ej. 100',
+                        prefixIcon: Icon(Icons.people),
+                        helperText: 'Capacidad total de inscritos para el programa',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (v) {
+                        if (isSingleSession) return null;
+                        final val = int.tryParse(v ?? '');
+                        if (val == null || val <= 0) {
+                          return 'Ingresa un número válido';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   // Tipo de sesiones
                   Align(
                     alignment: Alignment.centerLeft,
@@ -800,16 +865,22 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
               }
 
               final programTitle = titleController.text.trim();
-              await EventService.createEvent(
-                title: programTitle,
-                description: descriptionController.text.trim(),
-                coordinatorId: widget.user.uid,
-                totalHoursForCertificate: double.parse(
-                  hoursController.text.trim(),
-                ),
-                sessionType: isSingleSession
-                    ? SessionType.unica
-                    : SessionType.multiple,
+                  // Si es sesión única, usamos el cupo de la sesión como cupo del programa
+                  // Si es múltiple, usamos el valor del controlador (que no debería ser nulo por validación)
+                  final eventMaxVol = isSingleSession 
+                      ? (maxVol ?? 0) 
+                      : int.parse(eventMaxVolController.text);
+                  
+                  await EventService.createEvent(
+                    title: titleController.text.trim(),
+                    description: descriptionController.text.trim(),
+                    coordinatorId: widget.user.uid,
+                    startDate: programStartDate!,
+                    endDate: programEndDate!,
+                    maxVolunteers: eventMaxVol,
+                    sessionType: isSingleSession
+                        ? SessionType.unica
+                        : SessionType.multiple,
                 singleSessionDate: date,
                 singleSessionStartTime: startDateTime,
                 singleSessionEndTime: endDateTime,
@@ -974,9 +1045,9 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                                     children: [
                                       Expanded(
                                         child: _buildStatCard(
-                                          icon: Icons.schedule,
-                                          value: '${event.totalHoursForCertificate.toInt()}h',
-                                          label: 'Para certificado',
+                                          icon: Icons.date_range,
+                                          value: '${DateFormat('dd/MM').format(event.startDate)} - ${DateFormat('dd/MM').format(event.endDate)}',
+                                          label: 'Fechas',
                                           color: AppColors.primary,
                                         ),
                                       ),
@@ -1253,7 +1324,9 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Text(
-                                          '${s.registeredCount}/${s.maxVolunteers}',
+                                          s.maxVolunteers >= 9999
+                                              ? '${s.registeredCount} inscritos'
+                                              : '${s.registeredCount}/${s.maxVolunteers}',
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.bold,
@@ -1839,8 +1912,10 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
     final descriptionController = TextEditingController(
       text: event.description,
     );
-    final hoursController = TextEditingController(
-      text: event.totalHoursForCertificate.toStringAsFixed(0),
+    DateTime? editStartDate = event.startDate;
+    DateTime? editEndDate = event.endDate;
+    final eventMaxVolController = TextEditingController(
+      text: event.maxVolunteers.toString(),
     );
     bool isSubmitting = false;
     StateSetter? setStateDialogRef;
@@ -1868,19 +1943,88 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                 maxLines: 3,
                 decoration: const InputDecoration(labelText: 'Descripción'),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               TextFormField(
-                controller: hoursController,
+                controller: eventMaxVolController,
                 decoration: const InputDecoration(
-                  labelText: 'Horas para certificado',
+                  labelText: 'Cupos del programa',
+                  hintText: 'Ej. 100',
+                  prefixIcon: Icon(Icons.people),
+                  helperText: 'Capacidad total de inscritos para el programa',
                 ),
                 keyboardType: TextInputType.number,
                 validator: (v) {
-                  final value = double.tryParse(v ?? '');
-                  if (value == null || value <= 0) {
-                    return 'Ingresa horas válidas (>0)';
+                  final val = int.tryParse(v ?? '');
+                  if (val == null || val <= 0) {
+                    return 'Ingresa un número válido';
                   }
                   return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              StatefulBuilder(
+                builder: (context, setStateEdit) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Fechas del programa',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: editStartDate ?? DateTime.now(),
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                );
+                                if (picked != null) {
+                                  setStateEdit(() => editStartDate = picked);
+                                }
+                              },
+                              icon: const Icon(Icons.calendar_today),
+                              label: Text(
+                                editStartDate == null
+                                    ? 'Fecha inicio'
+                                    : DateFormat('dd/MM/yyyy').format(editStartDate!),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: editEndDate ?? editStartDate ?? DateTime.now(),
+                                  firstDate: editStartDate ?? DateTime.now(),
+                                  lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                                );
+                                if (picked != null) {
+                                  setStateEdit(() => editEndDate = picked);
+                                }
+                              },
+                              icon: const Icon(Icons.calendar_today),
+                              label: Text(
+                                editEndDate == null
+                                    ? 'Fecha fin'
+                                    : DateFormat('dd/MM/yyyy').format(editEndDate!),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
                 },
               ),
             ],
@@ -1906,9 +2050,9 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                     eventId: event.eventId,
                     title: programTitle,
                     description: descriptionController.text.trim(),
-                    totalHoursForCertificate: double.parse(
-                      hoursController.text.trim(),
-                    ),
+                    startDate: editStartDate,
+                    endDate: editEndDate,
+                    maxVolunteers: int.parse(eventMaxVolController.text),
                   );
                   if (!ctx.mounted) return;
                   navigator.pop();
@@ -2219,8 +2363,8 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
       if (!mounted) return;
       Navigator.of(context).pop(); // Cerrar diálogo de carga
 
-      // Guardar el PDF temporalmente
-      final directory = await getTemporaryDirectory();
+      // Guardar el PDF en documentos (simulando descarga)
+      final directory = await getApplicationDocumentsDirectory();
       final fileName = 'reporte_asistencia_${event.eventId}_${DateTime.now().millisecondsSinceEpoch}.pdf';
       final filePath = '${directory.path}/$fileName';
       final file = File(filePath);
@@ -2233,20 +2377,25 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
         builder: (context) => AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.check_circle, color: AppColors.success),
+              Icon(Icons.download_done, color: AppColors.success),
               SizedBox(width: 8),
-              Text('Reporte generado'),
+              Text('Reporte descargado'),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('El reporte de asistencia ha sido generado exitosamente.'),
+              Text('El reporte se ha guardado exitosamente en el dispositivo.'),
               const SizedBox(height: 12),
               Text(
                 'Evento: ${event.title}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Ubicación: Documentos/$fileName',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ],
           ),

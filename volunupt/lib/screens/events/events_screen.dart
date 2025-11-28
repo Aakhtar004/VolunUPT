@@ -213,13 +213,13 @@ class _EventsScreenState extends State<EventsScreen> {
                   Row(
                     children: [
                       Icon(
-                        Icons.access_time,
+                        Icons.date_range,
                         size: 16,
                         color: Colors.grey[600],
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${event.totalHoursForCertificate} horas para certificado',
+                        '${event.startDate.day}/${event.startDate.month} - ${event.endDate.day}/${event.endDate.month}/${event.endDate.year}',
                         style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
@@ -406,9 +406,9 @@ class _EventsScreenState extends State<EventsScreen> {
                         const SizedBox(height: 8),
 
                         _buildInfoRow(
-                          Icons.access_time,
-                          'Horas requeridas para certificado',
-                          '${event.totalHoursForCertificate} horas',
+                          Icons.date_range,
+                          'Fechas del programa',
+                          '${event.startDate.day}/${event.startDate.month}/${event.startDate.year} - ${event.endDate.day}/${event.endDate.month}/${event.endDate.year}',
                         ),
                         _buildInfoRow(
                           Icons.info,
@@ -494,7 +494,6 @@ class _EventsScreenState extends State<EventsScreen> {
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: () {
-                              Navigator.pop(context);
                               _showSubEvents(event);
                             },
                             style: ElevatedButton.styleFrom(
@@ -992,7 +991,9 @@ class _EventsScreenState extends State<EventsScreen> {
                 const Icon(Icons.people, size: 16, color: Colors.grey),
                 const SizedBox(width: 4),
                 Text(
-                  '${subEvent.registeredCount}/${subEvent.maxVolunteers} inscritos',
+                  subEvent.maxVolunteers >= 9999
+                      ? '${subEvent.registeredCount} inscritos'
+                      : '${subEvent.registeredCount}/${subEvent.maxVolunteers} inscritos',
                   style: const TextStyle(fontSize: 14, color: Colors.grey),
                 ),
               ],
@@ -1062,97 +1063,91 @@ class _EventsScreenState extends State<EventsScreen> {
       final confirmed = await showDialog<bool>(
         // ignore: use_build_context_synchronously
         context: ctx,
-        builder: (context) => AlertDialog(
-          title: const Text('Inscribirme al programa'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('¿Deseas inscribirte al programa "${event.title}"?'),
-              if (availableActivities.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.info_outline,
-                        color: AppColors.primary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Te inscribirás automáticamente en ${availableActivities.length} ${availableActivities.length == 1 ? "actividad disponible" : "actividades disponibles"}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.primary,
+        builder: (context) {
+          bool isRegistering = false;
+          return StatefulBuilder(
+            builder: (context, setStateDialog) {
+              return AlertDialog(
+                title: const Text('Inscribirme al programa'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('¿Deseas inscribirte al programa "${event.title}"?'),
+                    if (availableActivities.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.3),
                           ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info_outline,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Te inscribirás automáticamente en ${availableActivities.length} ${availableActivities.length == 1 ? "actividad disponible" : "actividades disponibles"}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-              ),
-              child: const Text('Inscribirme'),
-            ),
-          ],
-        ),
+                actions: [
+                  TextButton(
+                    onPressed: isRegistering ? null : () => Navigator.of(context).pop(false),
+                    child: const Text('Cancelar'),
+                  ),
+                  ElevatedButton(
+                    onPressed: isRegistering ? null : () async {
+                      setStateDialog(() => isRegistering = true);
+                      // Wait a bit to show loading state
+                      await Future.delayed(const Duration(milliseconds: 500));
+                      if (context.mounted) {
+                        Navigator.of(context).pop(true);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                    ),
+                    child: isRegistering 
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text('Inscribirme'),
+                  ),
+                ],
+              );
+            }
+          );
+        },
       );
 
       if (confirmed == true) {
         // Mostrar diálogo de cargando
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => PopScope(
-            canPop: false,
-            child: const Center(
-              child: Card(
-                child: Padding(
-                  padding: EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(
-                        color: AppColors.primary,
-                      ),
-                      SizedBox(height: 16),
-                      Text(
-                        'Inscribiendo...',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-
+        // if (!mounted) return;
+        // showDialog(...) // Removed old dialog
+        
         try {
           // Inscribirse al programa
           await EventService.registerUserToEvent(
@@ -1316,19 +1311,7 @@ class _EventsScreenState extends State<EventsScreen> {
         );
 
         try {
-          // Cancelar inscripción de todas las actividades primero
-          for (final reg in userSubRegs) {
-            try {
-              await EventService.unregisterUserFromSubEvent(
-                userId: currentUser.uid,
-                subEventId: reg.subEventId,
-              );
-            } catch (e) {
-              // Continuamos cancelando las demás
-            }
-          }
-
-          // Luego cancelar la inscripción del programa
+          // Cancelar inscripción del programa (esto maneja todas las actividades internamente)
           await EventService.unregisterUserFromEvent(
             userId: currentUser.uid,
             baseEventId: event.eventId,
@@ -1348,7 +1331,7 @@ class _EventsScreenState extends State<EventsScreen> {
 
           UiFeedback.showError(
             context,
-            'Ocurrió un error al cancelar tu inscripción.',
+            'No se pudo cancelar la inscripción: ${e.toString().replaceAll("Exception: ", "")}',
           );
         }
       }

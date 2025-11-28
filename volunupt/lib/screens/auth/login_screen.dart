@@ -305,10 +305,12 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ],
                               ),
-                              child: Icon(
-                                Icons.volunteer_activism,
-                                size: 56,
-                                color: AppColors.primary,
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Image.asset(
+                                  'assets/images/logop.png',
+                                  fit: BoxFit.contain,
+                                ),
                               ),
                             ),
                           ),

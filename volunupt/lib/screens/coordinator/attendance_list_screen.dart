@@ -39,58 +39,65 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
         backgroundColor: AppColors.primary,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: StreamBuilder<List<RegistrationModel>>(
-        stream: EventService.getSubEventRegistrations(widget.subEventId),
-        builder: (context, subSnapshot) {
-          if (subSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-          }
+      body: StreamBuilder<List<AttendanceRecordModel>>(
+        stream: AttendanceService.getSubEventAttendance(widget.subEventId),
+        builder: (context, attendanceSnapshot) {
+          final attendanceRecords = attendanceSnapshot.data ?? [];
 
-          if (subSnapshot.hasError) {
-            return _buildEmptyState('Error al cargar inscripciones de la actividad');
-          }
-
-          final subRegs = subSnapshot.data ?? [];
-
-          return FutureBuilder<SubEventModel?>(
-            future: EventService.getSubEventById(widget.subEventId),
-            builder: (context, subEventSnap) {
-              final now = DateTime.now();
-              bool canMarkNow = true;
-              final s = subEventSnap.data;
-              if (s != null) {
-                final open = s.startTime.subtract(const Duration(hours: 1));
-                final close = s.endTime.add(const Duration(hours: 2));
-                canMarkNow = now.isAfter(open) && now.isBefore(close);
+          return StreamBuilder<List<RegistrationModel>>(
+            stream: EventService.getSubEventRegistrations(widget.subEventId),
+            builder: (context, subSnapshot) {
+              if (subSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: AppColors.primary));
               }
 
-              return StreamBuilder<List<RegistrationModel>>(
-                stream: EventService.getEventRegistrations(widget.eventId),
-                builder: (context, eventSnapshot) {
-                  if (eventSnapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+              if (subSnapshot.hasError) {
+                return _buildEmptyState('Error al cargar inscripciones de la actividad');
+              }
+
+              final subRegs = subSnapshot.data ?? [];
+
+              return FutureBuilder<SubEventModel?>(
+                future: EventService.getSubEventById(widget.subEventId),
+                builder: (context, subEventSnap) {
+                  final now = DateTime.now();
+                  bool canMarkNow = true;
+                  final s = subEventSnap.data;
+                  if (s != null) {
+                    final open = s.startTime.subtract(const Duration(hours: 1));
+                    final close = s.endTime.add(const Duration(hours: 2));
+                    canMarkNow = now.isAfter(open) && now.isBefore(close);
                   }
 
-                  if (eventSnapshot.hasError) {
-                    final merged = subRegs;
-                    if (merged.isEmpty) {
-                      return _buildEmptyState('No hay estudiantes inscritos en esta actividad ni en el programa');
-                    }
-                    return _buildRegistrationsList(merged, canMarkNow);
-                  }
+                  return StreamBuilder<List<RegistrationModel>>(
+                    stream: EventService.getEventRegistrations(widget.eventId),
+                    builder: (context, eventSnapshot) {
+                      if (eventSnapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                      }
 
-                  final eventRegs = eventSnapshot.data ?? [];
-                  final byUser = <String, RegistrationModel>{};
-                  for (final r in [...eventRegs, ...subRegs]) {
-                    byUser[r.userId] = r;
-                  }
-                  final merged = byUser.values.toList()
-                    ..sort((a, b) => a.registeredAt.compareTo(b.registeredAt));
+                      if (eventSnapshot.hasError) {
+                        final merged = subRegs;
+                        if (merged.isEmpty) {
+                          return _buildEmptyState('No hay estudiantes inscritos en esta actividad ni en el programa');
+                        }
+                        return _buildRegistrationsList(merged, canMarkNow, attendanceRecords);
+                      }
 
-                  if (merged.isEmpty) {
-                    return _buildEmptyState('No hay estudiantes inscritos en esta actividad ni en el programa');
-                  }
-                  return _buildRegistrationsList(merged, canMarkNow);
+                      final eventRegs = eventSnapshot.data ?? [];
+                      final byUser = <String, RegistrationModel>{};
+                      for (final r in [...eventRegs, ...subRegs]) {
+                        byUser[r.userId] = r;
+                      }
+                      final merged = byUser.values.toList()
+                        ..sort((a, b) => a.registeredAt.compareTo(b.registeredAt));
+
+                      if (merged.isEmpty) {
+                        return _buildEmptyState('No hay estudiantes inscritos en esta actividad ni en el programa');
+                      }
+                      return _buildRegistrationsList(merged, canMarkNow, attendanceRecords);
+                    },
+                  );
                 },
               );
             },
@@ -100,14 +107,15 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
     );
   }
 
-  Widget _buildRegistrationsList(List<RegistrationModel> registrations, bool canMarkNow) {
+  Widget _buildRegistrationsList(List<RegistrationModel> registrations, bool canMarkNow, List<AttendanceRecordModel> attendanceRecords) {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: registrations.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final reg = registrations[index];
-        return _buildRegistrationTile(reg, canMarkNow);
+        final hasAttendance = attendanceRecords.any((a) => a.userId == reg.userId);
+        return _buildRegistrationTile(reg, canMarkNow, hasAttendance);
       },
     );
   }
@@ -138,7 +146,7 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
     );
   }
 
-  Widget _buildRegistrationTile(RegistrationModel registration, bool canMarkNow) {
+  Widget _buildRegistrationTile(RegistrationModel registration, bool canMarkNow, bool hasAttendance) {
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -186,6 +194,19 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
                 future: UserService.getUserProfile(registration.userId),
                 builder: (ctx, userSnap) {
                   final studentName = userSnap.data?.displayName ?? 'Estudiante';
+                  
+                  if (hasAttendance) {
+                    return OutlinedButton.icon(
+                      onPressed: null,
+                      icon: const Icon(Icons.check_circle, color: AppColors.success),
+                      label: const Text('Asistió', style: TextStyle(color: AppColors.success)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.success),
+                        disabledForegroundColor: AppColors.success,
+                      ),
+                    );
+                  }
+
                   return ElevatedButton.icon(
                 onPressed: (!_checkingIds.contains(registration.userId) && canMarkNow)
                         ? () => _manualCheckIn(registration.userId, studentName)

@@ -1,11 +1,125 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/models.dart';
+import 'event_service.dart';
 
 class CertificateService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _certificatesCollection = 'certificates';
   static const String _attendanceRecordsCollection = 'attendanceRecords';
   static const String _eventsCollection = 'events';
+  
+  // Generar certificado vía API y guardar en Firestore
+  static Future<File> generateCertificate({
+    required String userId,
+    required String userName,
+    required String school,
+    required String eventId,
+    required String eventTitle,
+    required double hours,
+    required String verificationCode,
+  }) async {
+    try {
+      // 1. Llamar a la API
+      final url = Uri.parse('http://38.250.161.53:8000/generar-certificado');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "nombre_completo": userName,
+          "escuela": school,
+          "nombre_campana": eventTitle,
+          "horas": hours,
+          "codigo_verificacion": verificationCode,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final bytes = response.bodyBytes;
+        final dir = await getApplicationDocumentsDirectory();
+        final fileName = 'certificado_${verificationCode}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsBytes(bytes);
+
+        // 2. Guardar registro en Firestore
+        final certificate = CertificateModel(
+          certificateId: '', // Se genera auto
+          userId: userId,
+          baseEventId: eventId,
+          eventTitle: eventTitle,
+          dateIssued: DateTime.now(),
+          pdfUrl: file.path, 
+          validationCode: verificationCode,
+          hoursCompleted: hours,
+        );
+
+        await _firestore.collection(_certificatesCollection).add(certificate.toMap());
+
+        return file;
+      } else {
+        throw Exception('Error del servidor: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error al generar certificado: $e');
+    }
+  }
+
+
+
+  // Obtener eventos elegibles para certificado (Status finalizado y > 85% asistencia)
+  static Future<List<EventModel>> getEligibleEventsForCertificate(String userId) async {
+    try {
+      // 1. Obtener eventos donde el usuario está inscrito
+      final registrationsSnapshot = await _firestore
+          .collection('registrations')
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      final eventIds = registrationsSnapshot.docs
+          .map((doc) => doc.data()['baseEventId'] as String)
+          .toSet()
+          .toList();
+
+      List<EventModel> eligibleEvents = [];
+
+      for (final eventId in eventIds) {
+        // 2. Obtener detalles del evento
+        final eventDoc = await _firestore.collection(_eventsCollection).doc(eventId).get();
+        if (!eventDoc.exists) continue;
+        
+        final event = EventModel.fromSnapshot(eventDoc);
+
+        // 3. Verificar estado finalizado
+        if (event.status != EventStatus.completado) continue;
+        
+        final existingCert = await _firestore
+            .collection(_certificatesCollection)
+            .where('userId', isEqualTo: userId)
+            .where('baseEventId', isEqualTo: eventId)
+            .get();
+            
+        if (existingCert.docs.isNotEmpty) continue; // Ya lo generó
+
+        // 5. Calcular porcentaje de asistencia
+        final totalEventHours = await EventService.calculateTotalHours(eventId);
+        if (totalEventHours == 0) continue;
+
+        final userHours = await getUserTotalHoursForEvent(userId, eventId);
+        final percentage = (userHours / totalEventHours) * 100;
+
+        if (percentage > 85) {
+          eligibleEvents.add(event);
+        }
+      }
+
+      return eligibleEvents;
+    } catch (e) {
+      throw Exception('Error al buscar eventos elegibles: $e');
+    }
+  }
 
   // Obtener certificados de un usuario
   static Stream<List<CertificateModel>> getUserCertificates(String userId) {
@@ -41,39 +155,30 @@ class CertificateService {
     }
   }
 
-  // Verificar si un usuario puede obtener certificado para un evento
-  static Future<bool> canUserGetCertificate(String userId, String eventId) async {
-    try {
-      // Verificar si ya tiene certificado para este evento
+  // Verificar si un usuario YA TIENE certificado (helper existente)
+  static Future<bool> hasCertificate(String userId, String eventId) async {
       final existingCertificate = await _firestore
           .collection(_certificatesCollection)
           .where('userId', isEqualTo: userId)
           .where('baseEventId', isEqualTo: eventId)
           .get();
+      return existingCertificate.docs.isNotEmpty;
+  }
 
-      if (existingCertificate.docs.isNotEmpty) {
-        return false; // Ya tiene certificado
-      }
+  // Verificar si un usuario puede obtener certificado (Lógica antigua, mantenida por compatibilidad si se usa en otro lado)
+  static Future<bool> canUserGetCertificate(String userId, String eventId) async {
+    try {
+      if (await hasCertificate(userId, eventId)) return false;
 
-      // Obtener información del evento
-      final eventDoc = await _firestore
-          .collection(_eventsCollection)
-          .doc(eventId)
-          .get();
+      final eventDoc = await _firestore.collection(_eventsCollection).doc(eventId).get();
+      if (!eventDoc.exists) return false;
 
-      if (!eventDoc.exists) {
-        return false;
-      }
-
-      final event = EventModel.fromSnapshot(eventDoc);
-
-      // Calcular horas totales del usuario en este evento
       final totalHours = await getUserTotalHoursForEvent(userId, eventId);
+      final requiredHours = await EventService.calculateTotalHours(eventId);
 
-      // Verificar si cumple con las horas requeridas
-      return totalHours >= event.totalHoursForCertificate;
+      return totalHours >= requiredHours; 
     } catch (e) {
-      throw Exception('Error al verificar elegibilidad para certificado: $e');
+      throw Exception('Error al verificar elegibilidad: $e');
     }
   }
 
@@ -99,46 +204,7 @@ class CertificateService {
     }
   }
 
-  // Generar certificado para un usuario
-  static Future<String> generateCertificate({
-    required String userId,
-    required String eventId,
-    required String userName,
-    required String eventTitle,
-    required double totalHours,
-  }) async {
-    try {
-      // Verificar elegibilidad
-      final canGenerate = await canUserGetCertificate(userId, eventId);
-      if (!canGenerate) {
-        throw Exception('El usuario no es elegible para este certificado');
-      }
 
-      // Crear certificado
-      final certificate = CertificateModel(
-        certificateId: '', // Se asignará automáticamente
-        userId: userId,
-        baseEventId: eventId,
-        pdfUrl: '', // Se generará después
-        dateIssued: DateTime.now(),
-        hoursCompleted: totalHours,
-      );
-
-      final docRef = await _firestore
-          .collection(_certificatesCollection)
-          .add(certificate.toMap());
-
-      // TODO: Aquí se llamaría a Cloud Function para generar el PDF
-      // Por ahora, solo guardamos la referencia
-      await docRef.update({
-        'pdfUrl': 'certificates/${docRef.id}.pdf'
-      });
-
-      return docRef.id;
-    } catch (e) {
-      throw Exception('Error al generar certificado: $e');
-    }
-  }
 
   // Verificar certificado por código
   static Future<CertificateModel?> verifyCertificate(String verificationCode) async {
@@ -222,6 +288,9 @@ class CertificateService {
           final event = EventModel.fromSnapshot(eventDoc);
           final userHours = hoursByEvent[eventId]!;
 
+          // Calcular horas requeridas dinámicamente
+          final requiredHours = await EventService.calculateTotalHours(eventId);
+
           // Verificar si ya tiene certificado
           final existingCertificate = await _firestore
               .collection(_certificatesCollection)
@@ -229,13 +298,13 @@ class CertificateService {
               .where('baseEventId', isEqualTo: eventId)
               .get();
 
-          final bool isEligible = userHours >= event.totalHoursForCertificate;
+          final bool isEligible = userHours >= requiredHours;
           final bool hasCertificate = existingCertificate.docs.isNotEmpty;
 
           eligibleEvents.add({
             'event': event,
             'userHours': userHours,
-            'requiredHours': event.totalHoursForCertificate,
+            'requiredHours': requiredHours,
             'isEligible': isEligible,
             'hasCertificate': hasCertificate,
             'canGenerate': isEligible && !hasCertificate,

@@ -445,11 +445,14 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
   }
 
   Widget _buildCertificationProgress(EventModel event) {
-    return FutureBuilder<double>(
-      future: _getUserHoursForEvent(event.eventId),
+    return FutureBuilder<List<double>>(
+      future: Future.wait([
+        _getUserHoursForEvent(event.eventId),
+        EventService.calculateTotalHours(event.eventId),
+      ]),
       builder: (context, snapshot) {
-        final userHours = snapshot.data ?? 0.0;
-        final requiredHours = event.totalHoursForCertificate;
+        final userHours = snapshot.data?[0] ?? 0.0;
+        final requiredHours = snapshot.data?[1] ?? 0.0;
         final progress = requiredHours > 0 ? userHours / requiredHours : 0.0;
         final isCompleted = userHours >= requiredHours;
 
