@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+jinja2
+weasyprint
+pydantic
+# Nota: WeasyPrint requiere dependencias del sistema (libcairo2, libpango, etc.).

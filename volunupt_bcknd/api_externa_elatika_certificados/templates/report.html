@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4 landscape; /* Horizontal para que quepan las columnas */
+            margin: 1cm;
+        }
+        body {
+            font-family: 'Helvetica', sans-serif;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #002D62;
+            padding-bottom: 10px;
+        }
+        .logo {
+            width: 80px;
+            vertical-align: middle;
+        }
+        h1 {
+            display: inline-block;
+            color: #002D62;
+            margin: 0 0 0 20px;
+            vertical-align: middle;
+            text-transform: uppercase;
+            font-size: 24px;
+        }
+        h2 {
+            text-align: center;
+            font-size: 18px;
+            color: #555;
+            margin-top: 5px;
+        }
+        
+        /* Estilos de la Tabla */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 12px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #002D62;
+            color: white;
+            font-weight: bold;
+        }
+        /* Las primeras dos columnas (Nombre y Código) alineadas a la izquierda */
+        td:nth-child(1), td:nth-child(2) {
+            text-align: left;
+        }
+        /* Filas alternas para mejor lectura */
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        
+        .check {
+            color: green;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .cross {
+            color: #ccc;
+            font-size: 10px;
+        }
+        
+        .footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            text-align: right;
+            font-size: 10px;
+            color: #777;
+            border-top: 1px solid #ccc;
+            padding-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRDkm0jE1oLhy35QkMWo2kOZ45TuEMh3x9LVHLe1zCcuP1LneLeArSsC8emF5QIvhXBXeE" class="logo" alt="Logo UPT">
+        <h1>Reporte de Asistencia</h1>
+    </div>
+
+    <h2>Evento: {{ tituloEvento }}</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 30%;">Estudiante</th>
+                <th style="width: 10%;">Código</th>
+                {% for actividad in actividades %}
+                    <th>{{ actividad.nombre }}</th>
+                {% endfor %}
+                <th style="width: 10%;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for inscrito in inscritos %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ inscrito.nombre }}</td>
+                <td>{{ inscrito.codigo }}</td>
+                
+                {% set ns = namespace(total=0) %}
+                {% for actividad in actividades %}
+                    <td>
+                        {% if actividad.id in inscrito.asistencias %}
+                            <span class="check">✔</span>
+                            {% set ns.total = ns.total + 1 %}
+                        {% else %}
+                            <span class="cross">-</span>
+                        {% endif %}
+                    </td>
+                {% endfor %}
+                
+                <td><strong>{{ ns.total }}</strong> / {{ actividades|length }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        Generado el: {{ fecha_generacion }}
+    </div>
+</body>
+</html>

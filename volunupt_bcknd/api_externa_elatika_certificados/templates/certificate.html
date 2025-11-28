@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        /* Definimos la hoja A4 Horizontal */
+        @page {
+            size: A4 landscape;
+            margin: 0;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Times New Roman', serif;
+            background-color: #fff;
+            color: #333;
+            /* Usamos Flexbox para centrar perfectamente sin cortar bordes */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            /* Ocupamos un poco menos del 100% para dejar margen blanco natural */
+            width: 270mm; 
+            height: 180mm;
+            position: relative;
+            
+            /* Diseño de bordes */
+            border: 3px solid #002D62; /* Azul UPT */
+            outline: 2px solid #D4AF37; /* Dorado */
+            outline-offset: -10px;      /* Espacio entre bordes */
+            
+            padding: 40px;
+            text-align: center;
+            box-sizing: border-box;
+            background: white;
+        }
+
+        /* Decoraciones en las esquinas */
+        .corner-decoration {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border: 2px solid #D4AF37;
+            z-index: 1;
+        }
+        /* Ajustamos posiciones para que no toquen el borde exterior */
+        .top-left { top: 15px; left: 15px; border-right: none; border-bottom: none; }
+        .bottom-right { bottom: 15px; right: 15px; border-left: none; border-top: none; }
+
+        .logo {
+            width: 110px; /* Tamaño controlado */
+            height: auto;
+            margin-bottom: 10px;
+            margin-top: 10px; /* Espacio superior para que no toque el borde */
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        h1 {
+            font-family: 'Helvetica', sans-serif;
+            color: #002D62;
+            font-size: 42px; /* Ligeramente más pequeño para asegurar ajuste */
+            text-transform: uppercase;
+            margin: 10px 0;
+            letter-spacing: 2px;
+        }
+        
+        .subtitle {
+            font-size: 18px;
+            color: #555;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        .recipient {
+            font-size: 32px;
+            font-weight: bold;
+            color: #000;
+            margin: 15px 0;
+            border-bottom: 1px solid #ccc;
+            display: inline-block;
+            padding: 0 40px 5px 40px;
+        }
+
+        .body-text {
+            font-size: 16px;
+            line-height: 1.5;
+            margin: 20px auto;
+            width: 85%;
+        }
+
+        .highlight {
+            font-weight: bold;
+            color: #002D62;
+        }
+
+        .footer {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-around;
+            page-break-inside: avoid; /* Evita que se corte */
+        }
+        
+        .signature {
+            border-top: 1px solid #333;
+            width: 35%;
+            padding-top: 5px;
+            font-size: 12px;
+        }
+
+        .verification {
+            position: absolute;
+            bottom: 15px;
+            left: 0;
+            width: 100%;
+            font-size: 9px;
+            color: #999;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="corner-decoration top-left"></div>
+        <div class="corner-decoration bottom-right"></div>
+
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRDkm0jE1oLhy35QkMWo2kOZ45TuEMh3x9LVHLe1zCcuP1LneLeArSsC8emF5QIvhXBXeE" class="logo" alt="Logo UPT">
+
+        <h1>CERTIFICADO DE RECONOCIMIENTO</h1>
+        <div class="subtitle">La Universidad Privada de Tacna otorga el presente a:</div>
+
+        <div class="recipient">{{ nombre_completo }}</div>
+
+        <div class="body-text">
+            Por su destacada participación y compromiso social en la campaña de voluntariado 
+            <span class="highlight">"{{ nombre_campana }}"</span>, organizada por la Escuela Profesional de 
+            <span class="highlight">{{ escuela }}</span>.
+            <br><br>
+            Se reconoce el cumplimiento satisfactorio de <span class="highlight">{{ horas }} horas</span> de labor social.
+        </div>
+
+        <div class="footer">
+            <div class="signature">
+                Director de RSU<br>
+                Universidad Privada de Tacna
+            </div>
+            <div class="signature">
+                Coordinador de Escuela<br>
+                {{ escuela }}
+            </div>
+        </div>
+
+        <div class="verification">
+            Tacna, {{ fecha }} <br>
+            ID de Verificación: {{ codigo_verificacion }}
+        </div>
+    </div>
+</body>
+</html>
