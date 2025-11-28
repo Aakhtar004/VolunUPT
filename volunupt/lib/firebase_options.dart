@@ -41,7 +41,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCM8Y9do2xi4CFX9vfc0c5_uuAxG3DAYAk',
+    apiKey: 'AIzaSyDiXRsnbTEcVkvEVohzWKX4RWLA5axgfcg',
     appId: '1:371362030185:web:4eb8c780a328e9bdebb8f8',
     messagingSenderId: '371362030185',
     projectId: 'volunupt-5982a',
@@ -52,33 +52,33 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCM8Y9do2xi4CFX9vfc0c5_uuAxG3DAYAk',
-    appId: '1:371362030185:android:4eb8c780a328e9bdebb8f8',
+    apiKey: 'AIzaSyDiXRsnbTEcVkvEVohzWKX4RWLA5axgfcg',
+    appId: '1:371362030185:android:fc6951710a54bf8bebb8f8',
     messagingSenderId: '371362030185',
     projectId: 'volunupt-5982a',
     storageBucket: 'volunupt-5982a.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCM8Y9do2xi4CFX9vfc0c5_uuAxG3DAYAk',
+    apiKey: 'AIzaSyDiXRsnbTEcVkvEVohzWKX4RWLA5axgfcg',
     appId: '1:371362030185:ios:4eb8c780a328e9bdebb8f8',
     messagingSenderId: '371362030185',
     projectId: 'volunupt-5982a',
     storageBucket: 'volunupt-5982a.firebasestorage.app',
-    iosBundleId: 'com.example.volunupt',
+    iosBundleId: 'com.gregbhm.volunupt',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCM8Y9do2xi4CFX9vfc0c5_uuAxG3DAYAk',
+    apiKey: 'AIzaSyDiXRsnbTEcVkvEVohzWKX4RWLA5axgfcg',
     appId: '1:371362030185:macos:4eb8c780a328e9bdebb8f8',
     messagingSenderId: '371362030185',
     projectId: 'volunupt-5982a',
     storageBucket: 'volunupt-5982a.firebasestorage.app',
-    iosBundleId: 'com.example.volunupt',
+    iosBundleId: 'com.gregbhm.volunupt',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyCM8Y9do2xi4CFX9vfc0c5_uuAxG3DAYAk',
+    apiKey: 'AIzaSyDiXRsnbTEcVkvEVohzWKX4RWLA5axgfcg',
     appId: '1:371362030185:windows:4eb8c780a328e9bdebb8f8',
     messagingSenderId: '371362030185',
     projectId: 'volunupt-5982a',

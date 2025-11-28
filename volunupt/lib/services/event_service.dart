@@ -196,10 +196,9 @@ class EventService {
       }
       final subEvent = SubEventModel.fromSnapshot(subDoc);
       final now = DateTime.now();
-      final hasEnded = subEvent.endTime.isBefore(now);
-      final hasStarted = !hasEnded && subEvent.startTime.isBefore(now);
-      if (hasStarted || hasEnded) {
-        throw Exception('La actividad ya inició o finalizó');
+      final hasStarted = subEvent.startTime.isBefore(now);
+      if (hasStarted) {
+        throw Exception('La actividad ya inició, no se puede inscribir');
       }
       if (subEvent.registeredCount >= subEvent.maxVolunteers) {
         throw Exception('La actividad está llena');
@@ -246,10 +245,10 @@ class EventService {
         return; // Ya inscrito al programa
       }
 
-      // Bloquear inscripción si el evento ya inició
+      // Bloquear inscripción si el evento ya inició (si alguna actividad ya empezó)
       final started = await hasEventStarted(baseEventId);
       if (started) {
-        throw Exception('El programa ya inició, las inscripciones al programa están cerradas');
+        throw Exception('El programa ya inició (al menos una actividad empezó), las inscripciones están cerradas');
       }
 
       final registration = RegistrationModel(
@@ -281,10 +280,9 @@ class EventService {
       }
       final subEvent = SubEventModel.fromSnapshot(subDoc);
       final now = DateTime.now();
-      final hasEnded = subEvent.endTime.isBefore(now);
-      final hasStarted = !hasEnded && subEvent.startTime.isBefore(now);
-      if (hasStarted || hasEnded) {
-        throw Exception('No se puede cancelar una actividad iniciada o finalizada');
+      final hasStarted = subEvent.startTime.isBefore(now);
+      if (hasStarted) {
+        throw Exception('No se puede cancelar una actividad que ya inició');
       }
 
       // Buscar y eliminar registro de inscripción

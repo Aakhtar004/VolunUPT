@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
+import 'event_service.dart';
 
 // Resultado de verificación para check-in por coordinador
 class CheckInEligibility {
@@ -524,10 +525,56 @@ class AttendanceService {
         return CheckInEligibility(allowed: false, reason: 'La actividad no pertenece al programa');
       }
 
-      // Validar permisos del coordinador
-      if (event.coordinatorId != coordinatorId) {
-        return CheckInEligibility(allowed: false, reason: 'No tienes permisos para este programa');
+      // Validar permisos del coordinador o administrador
+      debugPrint('🔍 ===== VALIDACIÓN DE PERMISOS =====');
+      debugPrint('🔍 Evento: "${event.title}" (ID: ${event.eventId})');
+      debugPrint('🔍 Coordinator ID del evento: ${event.coordinatorId}');
+      debugPrint('🔍 Usuario actual (coordinatorId): $coordinatorId');
+      
+      // Primero verificar si es el coordinador del evento
+      bool isCoordinator = event.coordinatorId == coordinatorId;
+      debugPrint('🔍 ¿Es coordinador del evento? $isCoordinator');
+      
+      // Si no es el coordinador del evento, verificar si es administrador
+      if (!isCoordinator) {
+        debugPrint('🔍 No es coordinador del evento, verificando si es administrador...');
+        try {
+          final userDoc = await _firestore.collection('users').doc(coordinatorId).get();
+          if (userDoc.exists) {
+            final userData = userDoc.data();
+            final role = userData?['role']?.toString().toLowerCase() ?? '';
+            
+            debugPrint('🔍 Rol obtenido de Firestore: "$role"');
+            debugPrint('🔍 Datos completos del usuario: ${userData?.keys.toList()}');
+            
+            // Si es administrador, permitir acceso
+            if (role == 'administrador') {
+              debugPrint('✅ Usuario es ADMINISTRADOR, permitiendo acceso a todos los eventos');
+              isCoordinator = true;
+            } else {
+              debugPrint('❌ Usuario NO es administrador. Rol encontrado: "$role"');
+              debugPrint('❌ También NO es coordinador de este evento específico');
+            }
+          } else {
+            debugPrint('❌ Documento de usuario NO existe en Firestore para UID: $coordinatorId');
+          }
+        } catch (e) {
+          debugPrint('❌ Error al verificar rol de usuario: $e');
+        }
+      } else {
+        debugPrint('✅ Usuario ES el coordinador de este evento');
       }
+      
+      if (!isCoordinator) {
+        debugPrint('❌ ===== ACCESO DENEGADO =====');
+        debugPrint('❌ Razón: No eres el coordinador de este evento ni administrador');
+        return CheckInEligibility(
+          allowed: false, 
+          reason: 'No tienes permisos para este programa. Solo el coordinador que lo creó o un administrador pueden pasar asistencia.',
+        );
+      }
+      
+      debugPrint('✅ ===== PERMISOS VALIDADOS CORRECTAMENTE =====');
 
       // Verificar inscripción del estudiante en actividad o programa
       final isRegisteredToSub = await _isUserRegisteredForSubEvent(studentId, subEventId);
@@ -649,6 +696,293 @@ class AttendanceService {
       return docRef.id;
     } catch (e) {
       throw Exception('Error al registrar asistencia manual: $e');
+    }
+  }
+
+  /// Calcular horas basadas en la duración de una actividad
+  static double _calculateHoursForActivity(SubEventModel subEvent) {
+    final duration = subEvent.endTime.difference(subEvent.startTime);
+    return duration.inMinutes / 60.0; // Convertir minutos a horas
+  }
+
+  /// Asignar horas automáticamente a todos los inscritos cuando una actividad finalice
+  /// Solo asigna a los que no tienen un registro de asistencia validada
+  static Future<void> autoAssignHoursForCompletedActivity({
+    required String subEventId,
+  }) async {
+    try {
+      // Obtener la actividad
+      final subEventDoc = await _firestore
+          .collection(_subEventsCollection)
+          .doc(subEventId)
+          .get();
+      
+      if (!subEventDoc.exists) {
+        debugPrint('⚠️ Actividad no existe: $subEventId');
+        return;
+      }
+
+      final subEvent = SubEventModel.fromSnapshot(subEventDoc);
+      final now = DateTime.now();
+      
+      // Verificar que la actividad ya finalizó
+      if (subEvent.endTime.isAfter(now)) {
+        debugPrint('⚠️ La actividad aún no ha finalizado: $subEventId');
+        return;
+      }
+
+      // Obtener todas las inscripciones a esta actividad
+      final registrationsQuery = await _firestore
+          .collection(_registrationsCollection)
+          .where('subEventId', isEqualTo: subEventId)
+          .get();
+
+      // También obtener inscripciones al programa (baseEventId) sin subEventId específico
+      final eventRegistrationsQuery = await _firestore
+          .collection(_registrationsCollection)
+          .where('baseEventId', isEqualTo: subEvent.baseEventId)
+          .where('subEventId', isEqualTo: '')
+          .get();
+
+      // Combinar todos los usuarios inscritos
+      final Set<String> userIds = {};
+      for (final doc in registrationsQuery.docs) {
+        final userId = doc.data()['userId'] as String?;
+        if (userId != null) userIds.add(userId);
+      }
+      for (final doc in eventRegistrationsQuery.docs) {
+        final userId = doc.data()['userId'] as String?;
+        if (userId != null) userIds.add(userId);
+      }
+
+      // Calcular horas para esta actividad
+      final hoursEarned = _calculateHoursForActivity(subEvent);
+
+      // Procesar cada usuario inscrito
+      final batch = _firestore.batch();
+      int assignedCount = 0;
+
+      for (final userId in userIds) {
+        // Verificar si ya tiene un registro de asistencia validada para esta actividad
+        final existingAttendanceQuery = await _firestore
+            .collection(_attendanceRecordsCollection)
+            .where('userId', isEqualTo: userId)
+            .where('subEventId', isEqualTo: subEventId)
+            .where('status', isEqualTo: AttendanceStatus.validated.toString().split('.').last)
+            .limit(1)
+            .get();
+
+        // Si ya tiene asistencia validada, saltar
+        if (existingAttendanceQuery.docs.isNotEmpty) {
+          continue;
+        }
+
+        // Crear registro de asistencia automática
+        final record = AttendanceRecordModel(
+          recordId: '',
+          userId: userId,
+          subEventId: subEventId,
+          baseEventId: subEvent.baseEventId,
+          sessionId: _generateSessionId(subEventId, subEvent.endTime),
+          checkInTime: subEvent.endTime, // Usar la hora de finalización
+          status: AttendanceStatus.validated,
+          hoursEarned: hoursEarned,
+          attendanceMethod: AttendanceMethod.manualList, // Marcado como automático
+          validatedBy: 'system',
+          validatedAt: now,
+          coordinatorNotes: 'Asignación automática al finalizar la actividad',
+        );
+
+        final recordRef = _firestore
+            .collection(_attendanceRecordsCollection)
+            .doc();
+        batch.set(recordRef, record.toMap());
+        assignedCount++;
+      }
+
+      if (assignedCount > 0) {
+        await batch.commit();
+        debugPrint('✅ Asignadas horas automáticamente a $assignedCount usuarios para actividad: ${subEvent.title}');
+      } else {
+        debugPrint('ℹ️ No se asignaron horas (todos ya tienen asistencia validada) para actividad: ${subEvent.title}');
+      }
+    } catch (e) {
+      debugPrint('❌ Error al asignar horas automáticamente para actividad $subEventId: $e');
+      rethrow;
+    }
+  }
+
+  /// Asignar horas automáticamente cuando un evento se complete
+  /// Asigna las horas del evento padre a todos los inscritos
+  static Future<void> autoAssignHoursForCompletedEvent({
+    required String eventId,
+  }) async {
+    try {
+      // Obtener el evento
+      final eventDoc = await _firestore
+          .collection(_eventsCollection)
+          .doc(eventId)
+          .get();
+      
+      if (!eventDoc.exists) {
+        debugPrint('⚠️ Evento no existe: $eventId');
+        return;
+      }
+
+      final event = EventModel.fromSnapshot(eventDoc);
+
+      // Verificar que el evento esté completado
+      final completed = await EventService.hasEventCompleted(eventId);
+      if (!completed) {
+        debugPrint('⚠️ El evento aún no ha finalizado: $eventId');
+        return;
+      }
+
+      // Obtener todas las inscripciones al evento (programa)
+      final registrationsQuery = await _firestore
+          .collection(_registrationsCollection)
+          .where('baseEventId', isEqualTo: eventId)
+          .get();
+
+      final Set<String> userIds = {};
+      for (final doc in registrationsQuery.docs) {
+        final userId = doc.data()['userId'] as String?;
+        if (userId != null) userIds.add(userId);
+      }
+
+      // Obtener todas las actividades del evento
+      final subEventsQuery = await _firestore
+          .collection(_subEventsCollection)
+          .where('baseEventId', isEqualTo: eventId)
+          .get();
+
+      final subEvents = subEventsQuery.docs
+          .map((doc) => SubEventModel.fromSnapshot(doc))
+          .toList();
+
+      if (subEvents.isEmpty) {
+        debugPrint('⚠️ El evento no tiene actividades: $eventId');
+        return;
+      }
+
+      // Procesar cada usuario inscrito
+      final batch = _firestore.batch();
+      int totalAssigned = 0;
+
+      for (final userId in userIds) {
+        // Verificar si ya tiene las horas completas del evento
+        final existingAttendanceQuery = await _firestore
+            .collection(_attendanceRecordsCollection)
+            .where('userId', isEqualTo: userId)
+            .where('baseEventId', isEqualTo: eventId)
+            .where('status', isEqualTo: AttendanceStatus.validated.toString().split('.').last)
+            .get();
+
+        double existingHours = 0.0;
+        for (final doc in existingAttendanceQuery.docs) {
+          final record = AttendanceRecordModel.fromSnapshot(doc);
+          existingHours += record.hoursEarned;
+        }
+
+        // Si ya tiene las horas requeridas o más, saltar
+        if (existingHours >= event.totalHoursForCertificate) {
+          continue;
+        }
+
+        // Calcular horas que faltan
+        final hoursNeeded = event.totalHoursForCertificate - existingHours;
+
+        // Buscar actividades que no tengan registro de asistencia
+        for (final subEvent in subEvents) {
+          // Verificar si ya tiene asistencia para esta actividad
+          final hasAttendance = existingAttendanceQuery.docs.any((doc) {
+            final record = AttendanceRecordModel.fromSnapshot(doc);
+            return record.subEventId == subEvent.subEventId;
+          });
+
+          if (!hasAttendance && hoursNeeded > 0) {
+            // Asignar horas de esta actividad (o parte si excede las horas necesarias)
+            final activityHours = _calculateHoursForActivity(subEvent);
+            final hoursToAssign = activityHours <= hoursNeeded 
+                ? activityHours 
+                : hoursNeeded;
+
+            final record = AttendanceRecordModel(
+              recordId: '',
+              userId: userId,
+              subEventId: subEvent.subEventId,
+              baseEventId: eventId,
+              sessionId: _generateSessionId(subEvent.subEventId, subEvent.endTime),
+              checkInTime: subEvent.endTime,
+              status: AttendanceStatus.validated,
+              hoursEarned: hoursToAssign,
+              attendanceMethod: AttendanceMethod.manualList,
+              validatedBy: 'system',
+              validatedAt: DateTime.now(),
+              coordinatorNotes: 'Asignación automática al completar el evento',
+            );
+
+            final recordRef = _firestore
+                .collection(_attendanceRecordsCollection)
+                .doc();
+            batch.set(recordRef, record.toMap());
+            totalAssigned++;
+            
+            // Si ya alcanzamos las horas necesarias, salir
+            if (hoursToAssign >= hoursNeeded) {
+              break;
+            }
+          }
+        }
+      }
+
+      if (totalAssigned > 0) {
+        await batch.commit();
+        debugPrint('✅ Asignadas horas automáticamente a $totalAssigned registros para evento completado: ${event.title}');
+      } else {
+        debugPrint('ℹ️ No se asignaron horas adicionales (todos ya tienen las horas completas) para evento: ${event.title}');
+      }
+    } catch (e) {
+      debugPrint('❌ Error al asignar horas automáticamente para evento $eventId: $e');
+      rethrow;
+    }
+  }
+
+  /// Verificar y asignar horas automáticamente para actividades finalizadas
+  /// Esta función debe llamarse periódicamente o cuando se actualice una actividad
+  static Future<void> checkAndAutoAssignHoursForCompletedActivities({
+    required String eventId,
+  }) async {
+    try {
+      // Obtener todas las actividades del evento
+      final subEventsQuery = await _firestore
+          .collection(_subEventsCollection)
+          .where('baseEventId', isEqualTo: eventId)
+          .get();
+
+      final now = DateTime.now();
+
+      for (final doc in subEventsQuery.docs) {
+        final subEvent = SubEventModel.fromSnapshot(doc);
+        
+        // Si la actividad ya finalizó, asignar horas automáticamente
+        if (subEvent.endTime.isBefore(now)) {
+          await autoAssignHoursForCompletedActivity(subEventId: subEvent.subEventId);
+        }
+      }
+
+      // Verificar si el evento está completado y asignar horas si es necesario
+      final completed = await EventService.hasEventCompleted(eventId);
+      if (completed) {
+        // Marcar el evento como completado
+        await EventService.updateEventStatus(eventId, EventStatus.completado);
+        
+        // Asignar horas automáticas del evento
+        await autoAssignHoursForCompletedEvent(eventId: eventId);
+      }
+    } catch (e) {
+      debugPrint('❌ Error al verificar y asignar horas automáticas: $e');
+      rethrow;
     }
   }
 }

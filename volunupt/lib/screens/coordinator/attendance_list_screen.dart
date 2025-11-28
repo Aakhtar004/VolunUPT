@@ -187,17 +187,17 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
                 builder: (ctx, userSnap) {
                   final studentName = userSnap.data?.displayName ?? 'Estudiante';
                   return ElevatedButton.icon(
-                    onPressed: (!_checkingIds.contains(registration.userId) && canMarkNow)
+                onPressed: (!_checkingIds.contains(registration.userId) && canMarkNow)
                         ? () => _manualCheckIn(registration.userId, studentName)
-                        : null,
+                    : null,
                 icon: const Icon(Icons.check_circle_outline),
                 label: Text(canMarkNow ? 'Marcar asistencia' : 'Fuera de horario'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(170, 44),
-                      textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(170, 44),
+                  textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
                   );
                 },
               ),

@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/feedback_overlay.dart';
 import '../../utils/app_dialogs.dart';
@@ -846,6 +849,13 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
   }
 
   void _showEventDetails(EventModel event) {
+    // Verificar y asignar horas automáticamente cuando se abren los detalles
+    AttendanceService.checkAndAutoAssignHoursForCompletedActivities(
+      eventId: event.eventId,
+    ).catchError((e) {
+      debugPrint('Error al verificar horas automáticas: $e');
+    });
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -992,6 +1002,19 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
                                   );
                                 },
                               );
+                            },
+                          ),
+                          
+                          const SizedBox(height: 24),
+                          
+                          // Botón de Reporte de Asistencia
+                          _buildActionButton(
+                            icon: Icons.description,
+                            label: 'Reporte de Asistencia',
+                            color: AppColors.accent,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _generateAttendanceReport(event);
                             },
                           ),
                           
@@ -2169,6 +2192,104 @@ class _ManageEventsScreenState extends State<ManageEventsScreen> {
 
   String _formatTime(DateTime time) {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _generateAttendanceReport(EventModel event) async {
+    // Mostrar diálogo de carga
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Generando reporte...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Generar el reporte
+      final pdfBytes = await ReportService.generateAttendanceReport(
+        eventId: event.eventId,
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Cerrar diálogo de carga
+
+      // Guardar el PDF temporalmente
+      final directory = await getTemporaryDirectory();
+      final fileName = 'reporte_asistencia_${event.eventId}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(pdfBytes);
+
+      // Mostrar diálogo de éxito con opciones
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: AppColors.success),
+              SizedBox(width: 8),
+              Text('Reporte generado'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('El reporte de asistencia ha sido generado exitosamente.'),
+              const SizedBox(height: 12),
+              Text(
+                'Evento: ${event.title}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _shareReport(file, event.title);
+              },
+              icon: const Icon(Icons.share),
+              label: const Text('Compartir'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Cerrar diálogo de carga si está abierto
+      FeedbackOverlay.showError(
+        context,
+        'Error al generar el reporte: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<void> _shareReport(File file, String eventTitle) async {
+    try {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'Reporte de Asistencia - $eventTitle',
+        text: 'Reporte de asistencia para el evento: $eventTitle',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      FeedbackOverlay.showError(
+        context,
+        'Error al compartir el reporte: ${e.toString()}',
+      );
+    }
   }
 }
 

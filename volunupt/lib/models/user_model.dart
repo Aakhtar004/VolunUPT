@@ -20,15 +20,37 @@ class UserModel {
 
   factory UserModel.fromSnapshot(DocumentSnapshot snap) {
     var snapshot = snap.data() as Map<String, dynamic>;
+    
+    // Parsear rol de forma más robusta
+    UserRole userRole = UserRole.estudiante;
+    final roleString = snapshot['role']?.toString().toLowerCase() ?? '';
+    
+    try {
+      // Intentar parsear directamente desde el string
+      if (roleString == 'coordinador') {
+        userRole = UserRole.coordinador;
+      } else if (roleString == 'administrador') {
+        userRole = UserRole.administrador;
+      } else if (roleString == 'estudiante') {
+        userRole = UserRole.estudiante;
+      } else {
+        // Fallback: intentar con el método original
+        userRole = UserRole.values.firstWhere(
+          (e) => e.toString().split('.').last.toLowerCase() == roleString,
+          orElse: () => UserRole.estudiante,
+        );
+      }
+    } catch (e) {
+      // Si falla, usar estudiante por defecto
+      userRole = UserRole.estudiante;
+    }
+    
     return UserModel(
       uid: snap.id,
-      email: snapshot['email'],
-      displayName: snapshot['displayName'],
-      photoURL: snapshot['photoURL'],
-      role: UserRole.values.firstWhere(
-        (e) => e.toString() == 'UserRole.${snapshot['role']}',
-        orElse: () => UserRole.estudiante,
-      ),
+      email: snapshot['email'] ?? '',
+      displayName: snapshot['displayName'] ?? '',
+      photoURL: snapshot['photoURL'] ?? '',
+      role: userRole,
       totalHours: (snapshot['totalHours'] ?? 0.0).toDouble(),
     );
   }

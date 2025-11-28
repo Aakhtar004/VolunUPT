@@ -30,25 +30,53 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
       final stats = await HistoryService.getUserAttendanceStats(
         widget.user.uid,
       );
-      final eligibleEvents = await CertificateService.getEligibleEventsForUser(
-        widget.user.uid,
-      );
+      
+      List<EventModel> eligibleEventsList = [];
+      try {
+        final eligibleEvents = await CertificateService.getEligibleEventsForUser(
+          widget.user.uid,
+        );
+        // Convertir la lista de mapas a solo la lista de eventos
+        eligibleEventsList = eligibleEvents
+            .map((item) => item['event'] as EventModel)
+            .toList();
+      } catch (e) {
+        debugPrint('Error cargando eventos elegibles: ${e.toString()}');
+        // Continuar sin eventos elegibles si falla
+      }
 
       setState(() {
         _stats = stats;
-        // Convertir la lista de mapas a solo la lista de eventos
-        _eligibleEvents = eligibleEvents
-            .map((item) => item['event'] as EventModel)
-            .toList();
+        _eligibleEvents = eligibleEventsList;
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      debugPrint('Error en _loadProgressData: ${e.toString()}');
+      setState(() {
+        _isLoading = false;
+        // Establecer valores por defecto si falla
+        _stats = {
+          'totalHours': 0,
+          'confirmedHours': 0,
+          'pendingHours': 0,
+          'totalActivities': 0,
+        };
+        _eligibleEvents = [];
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('No se pudieron cargar los datos. Intenta nuevamente'),
-            backgroundColor: Colors.red,
+            content: const Text('No se pudieron cargar algunos datos. Mostrando información disponible.'),
+            backgroundColor: AppColors.accent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            action: SnackBarAction(
+              label: 'Reintentar',
+              textColor: Colors.white,
+              onPressed: _loadProgressData,
+            ),
           ),
         );
       }
@@ -259,12 +287,24 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
                 }
 
                 if (snapshot.hasError) {
+                  debugPrint('Error en getUserMonthlyStats: ${snapshot.error}');
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text(
-                        'Error al cargar estadísticas',
-                        style: TextStyle(color: Colors.red[300]),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'No hay datos de progreso mensual',
+                            style: TextStyle(color: AppColors.textSecondary),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -362,12 +402,35 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
             ),
             const SizedBox(height: 16),
             if (_eligibleEvents.isEmpty)
-              const Center(
+              Center(
                 child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Text(
-                    'No hay programas de certificación disponibles',
-                    style: TextStyle(color: Colors.grey),
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.card_membership_outlined,
+                        size: 48,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'No hay programas de certificación disponibles',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Inscríbete a programas que ofrezcan certificados',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 ),
               )
@@ -492,7 +555,30 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(20),
-                      child: CircularProgressIndicator(),
+                      child: CircularProgressIndicator(color: AppColors.primary),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  debugPrint('Error en getUserDetailedHistory: ${snapshot.error}');
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 48,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'No hay actividades registradas',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }
@@ -500,10 +586,35 @@ class _HoursProgressScreenState extends State<HoursProgressScreen> {
                 final activities = (snapshot.data ?? []).take(3).toList();
 
                 if (activities.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text('No hay actividades recientes'),
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.event_available,
+                            size: 48,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Aún no tienes actividades',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Inscríbete a eventos para comenzar',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }

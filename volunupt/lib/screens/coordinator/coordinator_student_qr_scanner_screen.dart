@@ -40,26 +40,8 @@ class _CoordinatorStudentQRScannerScreenState extends State<CoordinatorStudentQR
   @override
   void initState() {
     super.initState();
-    _verifyCoordinatorSessionOnOpen();
-  }
-
-  Future<void> _verifyCoordinatorSessionOnOpen() async {
-    try {
-      final current = await AuthService.getCurrentUserData();
-      if (!mounted) return;
-      if (current == null || current.role != UserRole.coordinador) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showMessage('No autorizado. Inicia sesión como coordinador.');
-          Navigator.of(context).pop();
-        });
-      }
-    } catch (_) {
-      // Si falla la verificación, no bloquear, pero mostrar aviso.
-      if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showMessage('No se pudo verificar la sesión. Intenta nuevamente.');
-      });
-    }
+    // No bloquear al abrir - la validación se hará al escanear el QR
+    debugPrint('✅ Pantalla de escáner QR abierta');
   }
 
   @override
@@ -85,10 +67,33 @@ class _CoordinatorStudentQRScannerScreenState extends State<CoordinatorStudentQR
 
       final studentId = validation.userId!;
       final coordinator = await AuthService.getCurrentUserData();
-      if (coordinator == null || coordinator.role != UserRole.coordinador) {
-        _showMessage('No autorizado. Inicia sesión como coordinador.');
+      
+      if (coordinator == null) {
+        debugPrint('❌ Coordinador es null al escanear');
+        _showMessage('No se pudo verificar tu sesión. Por favor, inicia sesión nuevamente.');
         return;
       }
+      
+      debugPrint('🔍 Usuario escaneando: ${coordinator.displayName} (${coordinator.email})');
+      debugPrint('🔍 Rol del usuario: ${coordinator.role}');
+      debugPrint('🔍 Rol como string: ${coordinator.role.toString()}');
+      
+      // Permitir coordinadores y administradores - verificación más flexible
+      final roleString = coordinator.role.toString().toLowerCase();
+      final isCoordinator = coordinator.role == UserRole.coordinador || 
+                           roleString.contains('coordinador');
+      final isAdmin = coordinator.role == UserRole.administrador || 
+                     roleString.contains('administrador');
+      
+      debugPrint('🔍 isCoordinator: $isCoordinator, isAdmin: $isAdmin');
+      
+      if (!isCoordinator && !isAdmin) {
+        debugPrint('❌ Usuario no autorizado para escanear. Rol: ${coordinator.role}');
+        _showMessage('No autorizado. Solo coordinadores y administradores pueden escanear.');
+        return;
+      }
+      
+      debugPrint('✅ Usuario autorizado para escanear QR');
 
       // Fetch student info for display
       final studentProfile = await UserService.getUserProfile(studentId);
